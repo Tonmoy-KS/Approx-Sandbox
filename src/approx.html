@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Approx Sandbox - 3D Physics Engine</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #1a1a1a; }
+        canvas { display: block; }
+        #loading-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 200; display: flex; align-items: center; justify-content: center; flex-direction: column; color: white; font-family: monospace; }
+        #loading-box { border: 1px solid #00ffff; padding: 40px; border-radius: 5px; text-align: center; }
+        #loading-box h1 { margin-top: 0; color: #00ffff; }
+        #loading-box p { color: #ccc; }
+        #model-input { display: none; }
+        .file-label, #start-button { display: inline-block; background: #222; border: 1px solid #555; color: white; padding: 12px 20px; border-radius: 3px; cursor: pointer; margin: 10px; }
+        #start-button { background: #005555; border-color: #00ffff; font-weight: bold; }
+        #loaded-files-list { list-style: none; padding: 0; max-height: 120px; overflow-y: auto; }
+        #ui-container { position: absolute; top: 10px; left: 10px; font-family: monospace; font-size: 16px; color: white; z-index: 100; }
+        .ui-panel, #toggle-button { background-color: rgba(0,0,0,0.7); border: 1px solid #00ffff; border-radius: 5px; }
+        #toggle-button { width: 40px; height: 40px; color: #00ffff; cursor: pointer; font-size: 24px; display: flex; align-items: center; justify-content: center; user-select: none; }
+        #control-panel { padding: 10px; margin-top: 5px; display: none; }
+        #control-panel.open { display: block; }
+        .control-row { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; }
+        .control-row span { margin-right: 15px; }
+        .control-row button, .main-button, #spawn-shape-select { background: #222; border: 1px solid #555; color: white; cursor: pointer; padding: 5px 10px; border-radius: 3px; font-family: monospace;}
+        .main-button { width: 100%; padding: 10px; margin-top: 5px; font-weight: bold; }
+        #joystick-container { position: absolute; bottom: 20px; left: 20px; width: 120px; height: 120px; z-index: 100; }
+        #joystick-base { position: absolute; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.1); border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.2); }
+        #joystick-stick { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: rgba(255, 255, 255, 0.3); border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.5); }
+    </style>
+</head>
+<body>
+    <div id="loading-overlay">
+        <div id="loading-box">
+            <h1>3D Physics Sandbox</h1>
+            <p>Drag & Drop a GLB/GLTF file or select one.</p>
+            <input type="file" id="model-input" accept=".glb, .gltf" multiple>
+            <label for="model-input" class="file-label">Select Model(s)</label>
+            <ul id="loaded-files-list"></ul>
+            <button id="start-button">Start Simulation</button>
+        </div>
+    </div>
+
+    <div id="ui-container" style="display: none;">
+        <div id="toggle-button" title="Toggle Controls">☰</div>
+        <div id="control-panel" class="ui-panel">
+            <div class="control-row"><span>Spawning:</span><select id="spawn-shape-select"></select></div>
+            <div class="control-row"><span>Grabbing (RMB): <b id="grab-ui">On</b></span><button id="grab-toggle-btn">Toggle</button></div>
+            <div class="control-row"><span>Gravity (Y): <b id="gravity-ui">0</b></span><div><button id="gravity-down-btn" title="ArrowDown">-</button><button id="gravity-up-btn" title="ArrowUp">+</button></div></div>
+            <div class="control-row"><span>Time Scale: <b id="timescale-ui">1x</b></span><div><button id="time-slow-btn" title="Key 3">Slow</button><button id="time-normal-btn" title="Key 1">Norm</button><button id="time-fast-btn" title="Key 2">Fast</button></div></div>
+            <button class="main-button" id="shoot-button" title="Spacebar">SHOOT</button>
+            <button class="main-button" id="reset-button" title="Key R">RESET</button>
+        </div>
+    </div>
+    <div id="joystick-container" style="display: none;">
+        <div id="joystick-base"></div>
+        <div id="joystick-stick"></div>
+    </div>
+    
+    <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.157.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/" } }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        class Vec3{constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z}add(v){return new Vec3(this.x+v.x,this.y+v.y,this.z+v.z)}sub(v){return new Vec3(this.x-v.x,this.y-v.y,this.z-v.z)}mul(s){return new Vec3(this.x*s,this.y*s,this.z*s)}get length(){return Math.sqrt(this.x*this.x+this.y*this.y+this.z*this.z)}normalize(){const l=this.length;return l>0?new Vec3(this.x/l,this.y/l,this.z/l):new Vec3()}dot(v){return this.x*v.x+this.y*v.y+this.z*v.z}cross(v){return new Vec3(this.y*v.z-this.z*v.y,this.z*v.x-this.x*v.z,this.x*v.y-this.y*v.x)}}
+        const SHAPE_TYPE={SPHERE:0,BOX:1,CUSTOM:2};
+        class SphereShape{constructor(r){this.type=SHAPE_TYPE.SPHERE;this.radius=r}}
+        class BoxShape{constructor(s){this.type=SHAPE_TYPE.BOX;this.size=s}}
+        class RigidBody{constructor(p,s,m){this.position=p;this.shape=s;this.mass=m;this.invMass=m>0?1/m:0;this.restitution=.3;this.staticFriction=.4;this.dynamicFriction=.2;this.velocity=new Vec3;this.force=new Vec3;this.orientation=new THREE.Quaternion;this.angularVelocity=new Vec3;this.torque=new Vec3;this.invInertiaTensor=new Vec3;if(m>0)if(s.type===SHAPE_TYPE.SPHERE){const i=2/5*m*s.radius*s.radius;this.invInertiaTensor=new Vec3(1/i,1/i,1/i)}else if(s.type===SHAPE_TYPE.BOX||s.type===SHAPE_TYPE.CUSTOM){const i_x=1/12*m*(s.size.y*s.size.y+s.size.z*s.size.z),i_y=1/12*m*(s.size.x*s.size.x+s.size.z*s.size.z),i_z=1/12*m*(s.size.x*s.size.x+s.size.y*s.size.y);this.invInertiaTensor=new Vec3(i_x>0?1/i_x:0,i_y>0?1/i_y:0,i_z>0?1/i_z:0)}this.mesh=this.createMesh();this.mesh.position.copy(this.position);this.mesh.userData.physicsBody=this}createMesh(){let g;const m=new THREE.MeshStandardMaterial({color:(new THREE.Color).setHSL(Math.random(),.8,.6),metalness:.2,roughness:.1});if(this.shape.type===SHAPE_TYPE.SPHERE)g=new THREE.SphereGeometry(this.shape.radius,32,32);else g=new THREE.BoxGeometry(this.shape.size.x,this.shape.size.y,this.shape.size.z);const mesh=new THREE.Mesh(g,m);return mesh.castShadow=!0,mesh}applyForce(f,p=new Vec3){this.force=this.force.add(f);this.torque=this.torque.add(p.cross(f))}update(d){if(0===this.invMass)return;this.velocity=this.velocity.add(this.force.mul(this.invMass*d));this.position=this.position.add(this.velocity.mul(d));const a=new Vec3(this.torque.x*this.invInertiaTensor.x,this.torque.y*this.invInertiaTensor.y,this.torque.z*this.invInertiaTensor.z);this.angularVelocity=this.angularVelocity.add(a.mul(d));const b=this.angularVelocity.normalize(),c=this.angularVelocity.length()*d;c>0&&this.orientation.multiplyQuaternions((new THREE.Quaternion).setFromAxisAngle(new THREE.Vector3(b.x,b.y,b.z),c),this.orientation);this.mesh.position.copy(this.position);this.mesh.quaternion.copy(this.orientation);this.force=new Vec3;this.torque=new Vec3}}
+        class World{constructor(b){this.bodies=[];this.gravity=new Vec3(0,-9.81,0);this.bounds=b}addBody(b){this.bodies.push(b)}removeBody(b){const i=this.bodies.indexOf(b);i>-1&&this.bodies.splice(i,1)}update(d){const c=this.detectCollisions();c.forEach(a=>this.resolveCollision(a));this.bodies.forEach(a=>{a.applyForce(this.gravity.mul(a.mass));this.handleBoundaries(a);a.update(d)})}detectCollisions(){const c=[];for(let i=0;i<this.bodies.length;i++)for(let j=i+1;j<this.bodies.length;j++){const a=this.bodies[i],b=this.bodies[j];let t=null;const sA=a.shape.type,sB=b.shape.type;if(sA===SHAPE_TYPE.SPHERE&&sB===SHAPE_TYPE.SPHERE)t=this.detectSphereSphere(a,b);else if(sA===SHAPE_TYPE.SPHERE&&(sB===SHAPE_TYPE.BOX||sB===SHAPE_TYPE.CUSTOM))t=this.detectSphereBox(a,b);else if((sA===SHAPE_TYPE.BOX||sA===SHAPE_TYPE.CUSTOM)&&sB===SHAPE_TYPE.SPHERE)t=this.detectSphereBox(b,a,!0);else t=this.detectBoxBox(a,b);t&&c.push(t)}return c}detectSphereSphere(a,b){const d=b.position.sub(a.position),e=d.length,f=a.shape.radius+b.shape.radius;if(e<f){const n=d.normalize(),p=f-e,cp=a.position.add(n.mul(a.shape.radius-p/2));return{bodyA:a,bodyB:b,normal:n,penetration:p,contactPoint:cp}}return null}detectSphereBox(s,b,w=!1){const c=s.position,h=b.shape.size.mul(.5),m=b.position.sub(h),x=b.position.add(h),p=new Vec3(Math.max(m.x,Math.min(c.x,x.x)),Math.max(m.y,Math.min(c.y,x.y)),Math.max(m.z,Math.min(c.z,x.z))),d=c.sub(p),e=d.length;if(e<s.shape.radius){const n=e>0?d.normalize():new Vec3(0,1,0),t=s.shape.radius-e;return w?{bodyA:b,bodyB:s,normal:n.mul(-1),penetration:t,contactPoint:p}:{bodyA:s,bodyB:b,normal:n,penetration:t,contactPoint:p}}return null}detectBoxBox(a,b){const hA=a.shape.size.mul(.5),minA=a.position.sub(hA),maxA=a.position.add(hA),hB=b.shape.size.mul(.5),minB=b.position.sub(hB),maxB=b.position.add(hB);if(maxA.x>minB.x&&minA.x<maxB.x&&maxA.y>minB.y&&minA.y<maxB.y&&maxA.z>minB.z&&minA.z<maxB.z){const pX=Math.min(maxA.x-minB.x,maxB.x-minA.x),pY=Math.min(maxA.y-minB.y,maxB.y-minA.y),pZ=Math.min(maxA.z-minB.z,maxB.z-minA.z);let n,p;pX<pY&&pX<pZ?(n=new Vec3(a.position.x<b.position.x?-1:1,0,0),p=pX):pY<pZ?(n=new Vec3(0,a.position.y<b.position.y?-1:1,0),p=pY):(n=new Vec3(0,0,a.position.z<b.position.z?-1:1,0),p=pZ);return{bodyA:a,bodyB:b,normal:n,penetration:p,contactPoint:a.position}}return null}resolveCollision({bodyA:a,bodyB:b,normal:n,penetration:p,contactPoint:cp}){const c=n.mul(p/(a.invMass+b.invMass)*.8);a.position=a.position.sub(c.mul(a.invMass));b.position=b.position.add(c.mul(b.invMass));const rA=cp.sub(a.position),rB=cp.sub(b.position),vA=a.velocity.add(a.angularVelocity.cross(rA)),vB=b.velocity.add(b.angularVelocity.cross(rB)),rv=vB.sub(vA),vN=rv.dot(n);if(vN>0)return;const e=Math.min(a.restitution,b.restitution),k=a.invMass+b.invMass+rA.cross(n).dot(rA.cross(n))+rB.cross(n).dot(rB.cross(n));let jN=-(1+e)*vN/k;const impulse=n.mul(jN);a.velocity=a.velocity.sub(impulse.mul(a.invMass));a.angularVelocity=a.angularVelocity.sub(new Vec3(rA.cross(impulse).x*a.invInertiaTensor.x,rA.cross(impulse).y*a.invInertiaTensor.y,rA.cross(impulse).z*a.invInertiaTensor.z));b.velocity=b.velocity.add(impulse.mul(b.invMass));b.angularVelocity=b.angularVelocity.add(new Vec3(rB.cross(impulse).x*b.invInertiaTensor.x,rB.cross(impulse).y*b.invInertiaTensor.y,rB.cross(impulse).z*b.invInertiaTensor.z));const t=rv.sub(n.mul(vN));if(t.length<1e-6)return;const tNorm=t.normalize(),sf=Math.sqrt(a.staticFriction*a.staticFriction+b.staticFriction*b.staticFriction),df=Math.sqrt(a.dynamicFriction*a.dynamicFriction+b.dynamicFriction*b.dynamicFriction);let jT=-rv.dot(tNorm)/k;if(Math.abs(jT)<=jN*sf){const fImp=tNorm.mul(jT);a.velocity=a.velocity.sub(fImp.mul(a.invMass));b.velocity=b.velocity.add(fImp.mul(b.invMass))}else{const fImp=tNorm.mul(-jN*df);a.velocity=a.velocity.sub(fImp.mul(a.invMass));b.velocity=b.velocity.add(fImp.mul(b.invMass))}}handleBoundaries(b){const p=b.position,v=b.velocity;let r;b.shape.type===SHAPE_TYPE.SPHERE?r=new Vec3(b.shape.radius,b.shape.radius,b.shape.radius):r=b.shape.size.mul(.5);if(p.y-r.y<-this.bounds.y){p.y=-this.bounds.y+r.y;v.y*=-b.restitution}if(p.y+r.y>this.bounds.y){p.y=this.bounds.y-r.y;v.y*=-b.restitution}if(p.x-r.x<-this.bounds.x){p.x=-this.bounds.x+r.x;v.x*=-b.restitution}if(p.x+r.x>this.bounds.x){p.x=this.bounds.x-r.x;v.x*=-b.restitution}if(p.z-r.z<-this.bounds.z){p.z=-this.bounds.z+r.z;v.z*=-b.restitution}if(p.z+r.z>this.bounds.z){p.z=this.bounds.z-r.z;v.z*=-b.restitution}}}
+        
+        const uiContainer=document.getElementById('ui-container');const loadingOverlay=document.getElementById('loading-overlay');const startButton=document.getElementById('start-button');const modelInput=document.getElementById('model-input');const loadedFilesList=document.getElementById('loaded-files-list');const spawnShapeSelect=document.getElementById('spawn-shape-select');const joystickContainer=document.getElementById('joystick-container');const joystickStick=document.getElementById('joystick-stick');
+        const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1a1a);const camera=new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.1,1000);camera.position.set(0,5,15);const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(window.innerWidth,window.innerHeight);renderer.setPixelRatio(window.devicePixelRatio);renderer.shadowMap.enabled=true;document.body.appendChild(renderer.domElement);const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;scene.add(new THREE.AmbientLight(0xffffff,0.5));const dirLight=new THREE.DirectionalLight(0xffffff,1.5);dirLight.position.set(8,15,10);dirLight.castShadow=true;scene.add(dirLight);const boundSize=12;const floor=new THREE.Mesh(new THREE.PlaneGeometry(boundSize*2,boundSize*2),new THREE.MeshStandardMaterial({color:0x444444,side:THREE.DoubleSide}));floor.rotation.x=-Math.PI/2;floor.position.y=-boundSize;floor.receiveShadow=true;scene.add(floor);
+        const world=new World({x:boundSize,y:boundSize,z:boundSize});
+        let lastTime=0,accumulator=0;const timeStep=1/60;let timeScale=1.0;let allowGrab=true;const raycaster=new THREE.Raycaster();let grabbedBody=null;const mouse=new THREE.Vector2(),grabPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);const loadingManager=new THREE.LoadingManager();const gltfLoader=new GLTFLoader(loadingManager);
+        let spawnableModels=[{name:'Sphere',type:SHAPE_TYPE.SPHERE},{name:'Box',type:SHAPE_TYPE.BOX}];
+        let joystickActive=false;const joystickValue={x:0,y:0};let joystickCenter={x:0,y:0};const joystickRadius=60;
+
+        function handleFiles(files){for(const f of files){const u=URL.createObjectURL(f);gltfLoader.load(u,g=>{const o=g.scene,b=new THREE.Box3().setFromObject(o),s=b.getSize(new THREE.Vector3()),c=b.getCenter(new THREE.Vector3());o.position.sub(c);spawnableModels.push({name:f.name.split('.')[0],type:SHAPE_TYPE.CUSTOM,visualMesh:o,physicsSize:new Vec3(s.x,s.y,s.z)});const l=document.createElement('li');l.textContent=`✓ ${f.name}`;loadedFilesList.appendChild(l);updateSpawnOptionsUI()})}}
+        function resetSimulation(){while(world.bodies.length>0){const b=world.bodies[0];scene.remove(b.mesh);world.removeBody(b)}}
+        function spawnBody(n,r=!1){const m=spawnableModels.find(m=>m.name===n);if(!m)return;let s,ma,p,v;if(m.type===SHAPE_TYPE.SPHERE){const rad=.7*Math.random()+.3;s=new SphereShape(rad);ma=Math.PI*rad*rad*rad}else if(m.type===SHAPE_TYPE.BOX){const sz=new Vec3(Math.random()*.8+.5,Math.random()*.8+.5,Math.random()*.8+.5);s=new BoxShape(sz);ma=sz.x*sz.y*sz.z}else{s=new BoxShape(m.physicsSize);s.type=SHAPE_TYPE.CUSTOM;ma=s.size.x*s.size.y*s.size.z}ma*=4;if(r){p=new Vec3((Math.random()-.5)*boundSize*1.5,Math.random()*boundSize,(Math.random()-.5)*boundSize*1.5);v=new Vec3()}else{const cd=new THREE.Vector3();camera.getWorldDirection(cd);p=new Vec3(camera.position.x,camera.position.y,camera.position.z);v=new Vec3(cd.x,cd.y,cd.z).mul(35)}const b=new RigidBody(p,s,ma);if(m.type===SHAPE_TYPE.CUSTOM){scene.remove(b.mesh);b.mesh=m.visualMesh.clone(true);b.mesh.traverse(node=>{if(node.isMesh){node.castShadow=true;node.receiveShadow=true;}})}b.velocity=v;if(s.type!==SHAPE_TYPE.SPHERE)b.angularVelocity=new Vec3(Math.random()-.5,Math.random()-.5,Math.random()-.5).mul(5);world.addBody(b);scene.add(b.mesh)}
+        function updateSpawnOptionsUI(){spawnShapeSelect.innerHTML='';spawnableModels.forEach(m=>{const o=document.createElement('option');o.value=m.name;o.textContent=m.name;spawnShapeSelect.appendChild(o)})}
+        function adjustGravity(a){world.gravity.y+=a;updateUI()}
+        function setTimeScale(s){timeScale=s;updateUI()}
+        function updateUI(){const gUI=document.getElementById('grab-ui'),grUI=document.getElementById('gravity-ui'),tUI=document.getElementById('timescale-ui');gUI.textContent=allowGrab?"On":"Off";grUI.textContent=world.gravity.y.toFixed(2);tUI.textContent=`${timeScale}x`;}
+        
+        function gameLoop(t){
+            requestAnimationFrame(gameLoop);
+            const dt=(t-lastTime)/1000*timeScale||0;
+            lastTime=t;
+            accumulator+=dt;
+
+            if(joystickValue.x !== 0 || joystickValue.y !== 0){
+                const moveSpeed=5.0*(dt/timeScale);
+                const forward=new THREE.Vector3();camera.getWorldDirection(forward);
+                const right=new THREE.Vector3().crossVectors(forward, camera.up);
+                const moveDirection=new THREE.Vector3().copy(right).multiplyScalar(joystickValue.x).add(new THREE.Vector3().copy(forward).multiplyScalar(joystickValue.y));
+                moveDirection.normalize().multiplyScalar(moveSpeed);
+                camera.position.add(moveDirection);
+                controls.target.add(moveDirection);
+            }
+
+            if(grabbedBody){const r=new THREE.Vector3();raycaster.ray.intersectPlane(grabPlane,r);const f=new Vec3(r.x,r.y,r.z).sub(grabbedBody.position);grabbedBody.applyForce(f.mul(grabbedBody.mass*50))}
+            while(accumulator>=timeStep){world.update(timeStep);accumulator-=timeStep}
+            controls.update();
+            renderer.render(scene,camera);
+        }
+
+        startButton.addEventListener('click',()=>{loadingOverlay.style.display='none';uiContainer.style.display='block';joystickContainer.style.display='block';resetSimulation();gameLoop(0)});
+        modelInput.addEventListener('change',e=>handleFiles(e.target.files));loadingOverlay.addEventListener('dragover',e=>e.preventDefault());loadingOverlay.addEventListener('drop',e=>{e.preventDefault();handleFiles(e.dataTransfer.files)});
+        document.getElementById('toggle-button').addEventListener('click',e=>{const p=document.getElementById('control-panel');p.classList.toggle('open');e.target.textContent=p.classList.contains('open')?'✕':'☰'});
+        document.getElementById('grab-toggle-btn').addEventListener('click',()=>{allowGrab=!allowGrab;updateUI()});
+        document.getElementById('shoot-button').addEventListener('click',()=>spawnBody(spawnShapeSelect.value));
+        document.getElementById('reset-button').addEventListener('click',resetSimulation);
+        document.getElementById('gravity-up-btn').addEventListener('click',()=>adjustGravity(2));document.getElementById('gravity-down-btn').addEventListener('click',()=>adjustGravity(-2));
+        document.getElementById('time-slow-btn').addEventListener('click',()=>setTimeScale(.5));document.getElementById('time-normal-btn').addEventListener('click',()=>setTimeScale(1));document.getElementById('time-fast-btn').addEventListener('click',()=>setTimeScale(2));
+        window.addEventListener('keydown',e=>{if(e.code==='Space')spawnBody(spawnShapeSelect.value);if(e.code==='KeyR')resetSimulation();if(e.code==='ArrowUp')adjustGravity(2);if(e.code==='ArrowDown')adjustGravity(-2);if(e.code==='Digit1')setTimeScale(1);if(e.code==='Digit2')setTimeScale(2);if(e.code==='Digit3')setTimeScale(.5)});
+        window.addEventListener('pointermove',e=>{mouse.x=e.clientX/window.innerWidth*2-1;mouse.y=-(e.clientY/window.innerHeight)*2+1;if(joystickActive)handleJoystickMove(e)});
+        window.addEventListener('pointerdown',e=>{if(e.button!==2||!allowGrab)return;raycaster.setFromCamera(mouse,camera);const i=raycaster.intersectObjects(scene.children,!0);for(const o of i)if(o.object.userData.physicsBody){grabbedBody=o.object.userData.physicsBody;grabPlane.setFromNormalAndCoplanarPoint(camera.getWorldDirection(grabPlane.normal).negate(),o.point);controls.enabled=false;break}});
+        window.addEventListener('pointerup',e=>{if(e.button===0&&joystickActive)handleJoystickEnd(e);if(e.button===2){controls.enabled=true;if(grabbedBody)grabbedBody=null}});
+        window.addEventListener('contextmenu',e=>e.preventDefault());
+        window.addEventListener('resize',()=>{const w=window.innerWidth,h=window.innerHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h);});
+
+        function handleJoystickStart(e){if(e.button!==0&&e.type!=='touchstart')return;e.preventDefault();joystickActive=true;controls.enabled=false;const touch=e.changedTouches?e.changedTouches[0]:e;joystickCenter={x:touch.clientX,y:touch.clientY};}
+        function handleJoystickMove(e){if(!joystickActive)return;e.preventDefault();const touch=e.changedTouches?e.changedTouches[0]:e;let dx=touch.clientX-joystickCenter.x;let dy=touch.clientY-joystickCenter.y;const dist=Math.sqrt(dx*dx+dy*dy);if(dist>joystickRadius){dx*=joystickRadius/dist;dy*=joystickRadius/dist}joystickStick.style.transform=`translate(${dx}px, ${dy}px)`;joystickValue.x=dx/joystickRadius;joystickValue.y=-dy/joystickRadius;}
+        function handleJoystickEnd(e){if(!joystickActive)return;e.preventDefault();joystickActive=false;controls.enabled=true;joystickStick.style.transform=`translate(0px, 0px)`;joystickValue.x=0;joystickValue.y=0;}
+        joystickContainer.addEventListener('pointerdown',handleJoystickStart);
+        window.addEventListener('pointermove',handleJoystickMove);
+        window.addEventListener('pointerup',handleJoystickEnd);
+        joystickContainer.addEventListener('touchstart',handleJoystickStart,{passive:false});
+        window.addEventListener('touchmove',handleJoystickMove,{passive:false});
+        window.addEventListener('touchend',handleJoystickEnd,{passive:false});
+
+        updateSpawnOptionsUI();
+        updateUI();
+    </script>
+</body>
+</html>
