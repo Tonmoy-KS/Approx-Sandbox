@@ -1,0 +1,49 @@
+body { margin: 0; overflow: hidden; background: #181818; }
+canvas { display: block; }
+#sidebar {
+  position: absolute; top: 0; left: 0; width: 320px; height: 100vh; background: rgba(30,40,50,0.98);
+  color: #e0e0e0; z-index: 100; font-family: 'Segoe UI', monospace; box-sizing: border-box;
+  border-right: 2px solid #00bfff; box-shadow: 2px 0 16px rgba(0,0,0,0.3);
+  transform: translateX(-100%);
+  transition: transform 0.3s ease-in-out;
+  padding: 18px 20px;
+  overflow-y: auto;
+}
+#sidebar h1 { font-size: 1.5em; margin-bottom: 8px; color: #00bfff; }
+#sidebar label, #sidebar button, #sidebar select { margin-top: 12px; display: block; font-size: 1em; width: 100%; box-sizing: border-box;}
+#sidebar button, #sidebar select {
+  background: #222a33; color: #00bfff; border: 1px solid #00bfff; border-radius: 4px; padding: 8px 14px; margin-bottom: 10px; cursor: pointer; text-align: left;
+}
+#sidebar button:hover { background: #003344; }
+#sidebar button.active { background: #00bfff; color: #111; font-weight: bold; }
+#stats { margin-top: 18px; font-size: 0.95em; color: #aaa;}
+#sidebar input[type=file] { margin: 8px 0; }
+#sidebar .file-list { margin: 0; padding: 0; list-style: none; max-height: 100px; overflow-y: auto;}
+#sidebar .file-list li { background: #2c3440; padding: 4px 10px; margin-bottom: 3px; border-radius: 3px; }
+#sidebar .file-list li.selected { background: #0077aa; color: #fff; }
+#toggle-sidebar {
+  position: absolute; top: 22px; z-index: 200; background: #00bfff; color: #fff; border: none; border-radius: 0 4px 4px 0; font-size: 1.2em; width: 30px; height: 40px; cursor: pointer;
+  left: 0;
+  transition: left 0.3s ease-in-out;
+}
+#loading-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.93); z-index: 999; display: flex; align-items: center; justify-content: center;}
+#loading-box { border: 1px solid #00bfff; padding: 38px; border-radius: 5px; text-align: center; background: #111;}
+#loading-box h2 { color: #00bfff; margin-bottom: 10px; }
+#loading-box p { color: #ccc; }
+.highlighted { outline: 4px solid #00ff40 !important; }
+
+body.sidebar-visible #sidebar {
+  transform: translateX(0);
+}
+body.sidebar-visible #toggle-sidebar {
+  left: 320px;
+}
+
+@media (max-width: 768px) {
+  #sidebar {
+    width: 280px;
+  }
+  body.sidebar-visible #toggle-sidebar {
+    left: 280px;
+  }
+}
