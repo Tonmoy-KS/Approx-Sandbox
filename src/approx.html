@@ -3,56 +3,231 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Approx Sandbox - 3D Physics Engine</title>
+  <title>Approx Sandbox - 3D Physics Engine — V.1.5.0</title>
   <style>
-    body { margin: 0; overflow: hidden; background: #181818; }
+    body { margin: 0; overflow: hidden; background: #0a0f1a; font-family: 'Segoe UI', system-ui, sans-serif; }
     canvas { display: block; }
     #sidebar {
-      position: absolute; top: 0; left: 0; width: 320px; height: 100vh; background: rgba(30,40,50,0.98);
-      color: #e0e0e0; z-index: 100; font-family: 'Segoe UI', monospace; box-sizing: border-box;
-      border-right: 2px solid #00bfff; box-shadow: 2px 0 16px rgba(0,0,0,0.3);
+      position: absolute; top: 0; left: 0; width: 360px; height: 100vh; background: rgba(15, 25, 35, 0.97);
+      color: #e0e0e0; z-index: 100; box-sizing: border-box;
+      border-right: 2px solid #00bfff; box-shadow: 2px 0 24px rgba(0, 191, 255, 0.3);
       transform: translateX(-100%);
-      transition: transform 0.3s ease-in-out;
-      padding: 18px 20px;
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      padding: 24px;
       overflow-y: auto;
     }
-    #sidebar h1 { font-size: 1.5em; margin-bottom: 8px; color: #00bfff; }
-    #sidebar label, #sidebar button, #sidebar select { margin-top: 12px; display: block; font-size: 1em; width: 100%; box-sizing: border-box;}
+    #sidebar h1 { 
+      font-size: 1.8em; margin-bottom: 20px; color: #00bfff; 
+      font-weight: 700; letter-spacing: -0.5px;
+      text-shadow: 0 0 10px rgba(0, 191, 255, 0.3);
+    }
+    #sidebar h2 {
+      font-size: 1.2em; margin: 20px 0 12px 0; color: #4ecdc4;
+      font-weight: 600;
+      border-bottom: 1px solid rgba(78, 205, 196, 0.3);
+      padding-bottom: 6px;
+    }
+    #sidebar label, #sidebar button, #sidebar select { 
+      margin-top: 16px; display: block; font-size: 1em; width: 100%; box-sizing: border-box;
+      font-weight: 500;
+    }
     #sidebar button, #sidebar select {
-      background: #222a33; color: #00bfff; border: 1px solid #00bfff; border-radius: 4px; padding: 8px 14px; margin-bottom: 10px; cursor: pointer; text-align: left;
+      background: #1e2d3d; color: #00bfff; border: 1px solid #00bfff; 
+      border-radius: 8px; padding: 12px 18px; margin-bottom: 14px; 
+      cursor: pointer; text-align: left; transition: all 0.25s ease;
+      font-weight: 600;
+      letter-spacing: 0.5px;
     }
-    #sidebar button:hover { background: #003344; }
-    #sidebar button.active { background: #00bfff; color: #111; font-weight: bold; }
-    #stats { margin-top: 18px; font-size: 0.95em; color: #aaa;}
-    #sidebar input[type=file] { margin: 8px 0; }
-    #sidebar .file-list { margin: 0; padding: 0; list-style: none; max-height: 100px; overflow-y: auto;}
-    #sidebar .file-list li { background: #2c3440; padding: 4px 10px; margin-bottom: 3px; border-radius: 3px; }
-    #sidebar .file-list li.selected { background: #0077aa; color: #fff; }
+    #sidebar select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3e%3cpath fill='%2300bfff' d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      background-size: 18px;
+      padding-right: 48px;
+    }
+    #sidebar button:hover, #sidebar select:hover { 
+      background: #003a4d; transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 191, 255, 0.25);
+    }
+    #sidebar button.active { 
+      background: #00bfff; color: #0a1929; font-weight: 700;
+      box-shadow: 0 0 16px rgba(0, 191, 255, 0.5);
+      transform: translateY(-1px);
+    }
+    #stats { 
+      margin-top: 24px; font-size: 0.94em; color: #aaa; 
+      padding-top: 20px; border-top: 1px solid rgba(0, 191, 255, 0.25);
+      line-height: 1.5;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 16px;
+      border-radius: 8px;
+    }
+    #sidebar input[type=file] { margin: 10px 0; }
+    #sidebar .file-list { 
+      margin: 0; padding: 0; list-style: none; max-height: 140px; 
+      overflow-y: auto; margin-top: 10px;
+    }
+    #sidebar .file-list li { 
+      background: #253545; padding: 8px 14px; margin-bottom: 6px; 
+      border-radius: 6px; font-size: 0.92em; transition: all 0.2s ease;
+      border-left: 3px solid transparent;
+    }
+    #sidebar .file-list li:hover { 
+      background: #2a3a4a; border-left: 3px solid #00bfff;
+    }
+    #sidebar .file-list li.selected { 
+      background: #0077aa; color: #fff; 
+      box-shadow: 0 0 10px rgba(0, 119, 170, 0.6);
+      border-left: 3px solid #ffffff;
+    }
     #toggle-sidebar {
-      position: absolute; top: 22px; z-index: 200; background: #00bfff; color: #fff; border: none; border-radius: 0 4px 4px 0; font-size: 1.2em; width: 30px; height: 40px; cursor: pointer;
+      position: absolute; top: 28px; z-index: 200; background: #00bfff; color: #0a1929; 
+      border: none; border-radius: 0 8px 8px 0; font-size: 1.4em; 
+      width: 42px; height: 50px; cursor: pointer;
       left: 0;
-      transition: left 0.3s ease-in-out;
+      transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: bold;
+      box-shadow: 2px 0 8px rgba(0, 191, 255, 0.4);
     }
-    #loading-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.93); z-index: 999; display: flex; align-items: center; justify-content: center;}
-    #loading-box { border: 1px solid #00bfff; padding: 38px; border-radius: 5px; text-align: center; background: #111;}
-    #loading-box h2 { color: #00bfff; margin-bottom: 10px; }
-    #loading-box p { color: #ccc; }
-    .highlighted { outline: 4px solid #00ff40 !important; }
+    #toggle-sidebar:hover {
+      background: #0099cc;
+      box-shadow: 2px 0 12px rgba(0, 191, 255, 0.6);
+    }
+    #loading-overlay { 
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
+      background: linear-gradient(135deg, #0a0f1a 0%, #111827 100%); 
+      z-index: 999; display: flex; align-items: center; justify-content: center;
+    }
+    #loading-box { 
+      border: 3px solid #00bfff; padding: 50px; border-radius: 16px; 
+      text-align: center; background: rgba(10, 15, 26, 0.95);
+      box-shadow: 0 0 60px rgba(0, 191, 255, 0.4);
+      max-width: 600px; width: 90%;
+      backdrop-filter: blur(10px);
+    }
+    #loading-box h2 { 
+      color: #00bfff; margin-bottom: 20px; font-size: 2.5em; 
+      font-weight: 800; letter-spacing: -1px;
+      text-shadow: 0 0 20px rgba(0, 191, 255, 0.5);
+    }
+    #loading-box p { 
+      color: #e2e8f0; margin-bottom: 28px; line-height: 1.7; 
+      font-size: 1.2em;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #loading-box input[type="file"] {
+      margin: 20px 0;
+      padding: 14px;
+      border: 2px dashed #00bfff;
+      border-radius: 10px;
+      background: rgba(0, 191, 255, 0.1);
+      color: #e2e8f0;
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 1.1em;
+    }
+    #loading-box button {
+      background: linear-gradient(135deg, #00bfff 0%, #0099cc 100%); 
+      color: #0a1929; border: none; 
+      padding: 16px 40px; border-radius: 10px; font-size: 1.2em;
+      font-weight: 700; cursor: pointer; margin-top: 16px;
+      transition: all 0.3s ease;
+      letter-spacing: 1px;
+      box-shadow: 0 4px 20px rgba(0, 191, 255, 0.4);
+    }
+    #loading-box button:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 6px 25px rgba(0, 191, 255, 0.6);
+    }
+    .highlighted { 
+      outline: 4px solid #00ff40 !important; 
+      outline-offset: 2px;
+      box-shadow: 0 0 20px rgba(0, 255, 64, 0.5);
+    }
 
     body.sidebar-visible #sidebar {
       transform: translateX(0);
     }
     body.sidebar-visible #toggle-sidebar {
-      left: 320px;
+      left: 360px;
     }
 
     @media (max-width: 768px) {
       #sidebar {
-        width: 280px;
+        width: 300px;
       }
       body.sidebar-visible #toggle-sidebar {
-        left: 280px;
+        left: 300px;
       }
+      #loading-box {
+        padding: 35px 25px;
+        margin: 15px;
+      }
+      #loading-box h2 {
+        font-size: 2.0em;
+      }
+    }
+
+    /* Slider styling */
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(to right, #1e2d3d, #00bfff);
+      outline: none;
+      margin: 10px 0;
+      border: 1px solid #00bfff;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #00bfff;
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(0, 191, 255, 0.8);
+      border: 2px solid #0a1929;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #00bfff;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 12px rgba(0, 191, 255, 0.8);
+      border: 2px solid #0a1929;
+    }
+
+    /* Object info styling */
+    #object-info {
+      background: rgba(0, 0, 0, 0.4);
+      padding: 16px;
+      border-radius: 8px;
+      margin-top: 18px;
+      font-size: 0.94em;
+      line-height: 1.6;
+      border: 1px solid rgba(0, 191, 255, 0.2);
+    }
+    #object-info b {
+      color: #00bfff;
+      display: block;
+      margin-bottom: 8px;
+      font-size: 1.1em;
+    }
+
+    /* World size indicator */
+    #world-size {
+      margin-top: 12px;
+      font-size: 0.9em;
+      color: #64ffda;
+      text-align: center;
+      font-weight: 600;
     }
   </style>
   <script type="importmap">
@@ -66,8 +241,8 @@
   <div id="loading-overlay">
     <div id="loading-box">
       <h2>Approx Sandbox</h2>
-      <p>Modern 3D Physics Engine<br>
-         Drag & Drop GLB/GLTF, or click Start.</p>
+      <p>3D Physics Engine<br>
+         Drag & Drop GLB/GLTF models, or click Start to begin.</p>
       <input type="file" id="model-input" accept=".glb,.gltf" multiple>
       <ul id="file-list" class="file-list"></ul>
       <button id="start-button">Start Simulation</button>
@@ -76,26 +251,47 @@
   <button id="toggle-sidebar" style="display:none;">☰</button>
   <div id="sidebar" style="display:none;">
     <h1>Physics Controls</h1>
-    <label>Spawn Shape: <select id="spawn-shape"></select></label>
-    <label>Gravity: <input type="range" id="gravity-slider" min="-25" max="25" value="-10"></label>
-    <label>Time Scale: <input type="range" id="timescale-slider" min="0.1" max="2" step="0.01" value="1"></label>
+    <label>Spawn Shape: 
+      <select id="spawn-shape">
+        <option value="Sphere">Sphere</option>
+        <option value="Box">Box</option>
+        <option value="Cylinder">Cylinder</option>
+      </select>
+    </label>
+    <label>Gravity: <input type="range" id="gravity-slider" min="-50" max="50" value="-15"></label>
+    <span id="gravity-value" style="display:block; text-align:right; color:#00bfff; margin-top:-18px; margin-bottom:10px; font-weight:600;">-15</span>
+    <label>Time Scale: <input type="range" id="timescale-slider" min="0.1" max="3" step="0.01" value="1"></label>
+    <span id="timescale-value" style="display:block; text-align:right; color:#00bfff; margin-top:-18px; margin-bottom:10px; font-weight:600;">1.00</span>
     <label>Friction: <input type="range" id="friction-slider" min="0" max="1" step="0.01" value="0.3"></label>
-    <label>Restitution: <input type="range" id="restitution-slider" min="0" max="1" step="0.01" value="0.35"></label>
-    <button id="paint-btn">Paint</button>
-    <button id="shoot-btn">Shoot Object</button>
-    <button id="reset-btn">Reset World</button>
-    <button id="pause-btn">Pause</button>
-    <button id="resume-btn" style="display:none;">Resume</button>
-    <button id="cam-front-btn">Front</button>
-    <button id="cam-top-btn">Top</button>
+    <span id="friction-value" style="display:block; text-align:right; color:#00bfff; margin-top:-18px; margin-bottom:10px; font-weight:600;">0.30</span>
+    <label>Restitution: <input type="range" id="restitution-slider" min="0" max="1" step="0.01" value="0.4"></label>
+    <span id="restitution-value" style="display:block; text-align:right; color:#00bfff; margin-top:-18px; margin-bottom:14px; font-weight:600;">0.40</span>
+    
+    <h2>Interaction</h2>
+    <button id="paint-btn">🎨 Paint Mode</button>
+    <button id="shoot-btn">🧱 Place Object</button>
+    <button id="spawn-random-btn">🎲 Spawn Random Object</button>
+    
+    <h2>World Management</h2>
+    <button id="reset-btn">↩️ Reset World</button>
+    <button id="pause-btn">⏸️ Pause</button>
+    <button id="resume-btn" style="display:none;">▶️ Resume</button>
+    
+    <h2>Camera Presets</h2>
+    <button id="cam-front-btn" style="margin-right:8px;">Front</button>
+    <button id="cam-top-btn" style="margin-right:8px;">Top</button>
     <button id="cam-side-btn">Side</button>
-    <button id="reset-object-btn">Reset Selected</button>
-    <button id="save-btn">Save Scene</button>
-    <button id="load-btn">Load Scene</button>
+    <button id="cam-orbit-btn">Orbit</button>
+    
+    <h2>Scene Management</h2>
+    <button id="reset-object-btn">🔄 Reset Selected</button>
+    <button id="save-btn">💾 Save Scene</button>
+    <button id="load-btn">📂 Load Scene</button>
+    <button id="import-btn">📥 Import Scene</button>
+    
     <input type="file" id="import-scene-input" accept="application/json" style="display:none;">
-    <button id="import-btn">Import Scene</button>
     <div id="stats"></div>
-    <div id="object-info" style="margin-top:10px;font-size:0.96em;color:#fff;"></div>
+    <div id="object-info"></div>
   </div>
   <script type="module">
     import * as THREE from 'three';
@@ -147,7 +343,7 @@
         this.mass = mass;
         this.invMass = mass>0 ? 1/mass : 0;
         this.mesh = mesh;
-        this.restitution = 0.35;
+        this.restitution = 0.4;
         this.friction = 0.3;
         this.angularVelocity = Vec3.zero();
         this.orientation = new Quaternion();
@@ -187,18 +383,18 @@
     class PhysicsWorld {
       constructor() {
         this.bodies = [];
-        this.gravity = new Vec3(0, -10, 0);
-        this.bounds = {x:20,y:20,z:20};
+        this.gravity = new Vec3(0, -15, 0);
+        this.bounds = {x:100, y:100, z:100};
         this.collisionCount = 0;
       }
       addBody(b) { this.bodies.push(b);}
       removeBody(b) { const i=this.bodies.indexOf(b); if(i>-1) this.bodies.splice(i,1);}
       update(dt) {
         this.collisionCount = 0;
-        // Broadphase spatial hash
+        // Broadphase spatial hash with larger grid
         let grid = {};
         for(const b of this.bodies) {
-          let key = `${Math.floor(b.position.x)}:${Math.floor(b.position.y)}:${Math.floor(b.position.z)}`;
+          let key = `${Math.floor(b.position.x/2)}:${Math.floor(b.position.y/2)}:${Math.floor(b.position.z/2)}`;
           if(!grid[key]) grid[key]=[];
           grid[key].push(b);
         }
@@ -207,18 +403,16 @@
           b.integrate(dt);
         }
 
-        // --- IMPROVEMENT: Ground and Bounds Collision ---
         for(const b of this.bodies) {
             let halfSize = 0;
             if (b.shape.type === SHAPE_TYPE.SPHERE) halfSize = b.shape.radius;
             else if (b.shape.type === SHAPE_TYPE.BOX) halfSize = b.shape.size / 2;
             else if (b.shape.type === SHAPE_TYPE.CYLINDER) halfSize = b.shape.height / 2;
             
-            // Ground collision
+            // Ground collision (y = 0)
             if(b.position.y < halfSize) {
               b.position.y = halfSize;
               b.velocity.y = -b.velocity.y * b.restitution;
-              // Apply friction
               b.velocity.x *= (1 - b.friction);
               b.velocity.z *= (1 - b.friction);
             }
@@ -234,10 +428,11 @@
                   b.velocity[axis] = -b.velocity[axis]*b.restitution;
                 }
             }
-             if(b.position.y > this.bounds.y - halfSize) {
-                  b.position.y = this.bounds.y - halfSize;
-                  b.velocity.y = -b.velocity.y*b.restitution;
-             }
+            // Ceiling collision
+            if(b.position.y > this.bounds.y - halfSize) {
+              b.position.y = this.bounds.y - halfSize;
+              b.velocity.y = -b.velocity.y*b.restitution;
+            }
         }
 
         // Object collisions (only within same grid cell)
@@ -314,60 +509,74 @@
 
     // --- Rendering & UI ---
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x181818);
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-    camera.position.set(0,8,16);
+    scene.background = new THREE.Color(0x0a0f1a);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 200);
+    camera.position.set(0, 25, 50);
 
     const renderer = new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
+    controls.minDistance = 10;
+    controls.maxDistance = 150;
 
-    // --- IMPROVEMENT: Ground plane position fixed
-    const groundGeo = new THREE.BoxGeometry(20, 0.4, 20);
-    const groundMat = new THREE.MeshStandardMaterial({color:0x222a33});
+    // --- Enhanced ground with larger size and better visuals ---
+    const groundGeo = new THREE.PlaneGeometry(100, 100);
+    const groundMat = new THREE.MeshStandardMaterial({ 
+      color: 0x1a2b3c,
+      roughness: 0.7,
+      metalness: 0.1
+    });
     const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.position.y = -0.2; // Top of the ground is at y=0
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0;
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // World bounding box
+    // detailed grid helper for world
+    const gridHelper = new THREE.GridHelper(100, 50, 0x00bfff, 0x004466);
+    gridHelper.position.y = 0.01;
+    scene.add(gridHelper);
+
+    // World bounding box - much larger
     const boundsBox = new THREE.BoxHelper(new THREE.Mesh(
-      new THREE.BoxGeometry(20, 20, 20)
+      new THREE.BoxGeometry(100, 100, 100)
     ), 0x00bfff);
-    boundsBox.position.set(0, 10, 0); // Centered at y=10
+    boundsBox.position.set(0, 50, 0);
     scene.add(boundsBox);
 
-    // Lights
-    const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+    // Ambient lighting 
+    const ambient = new THREE.AmbientLight(0xffffff, 0.3);
     scene.add(ambient);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
-    dirLight.position.set(9, 20, 8);
+    
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(30, 50, 30);
     dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 4096;
+    dirLight.shadow.mapSize.height = 4096;
+    dirLight.shadow.camera.near = 0.5;
+    dirLight.shadow.camera.far = 150;
+    dirLight.shadow.camera.left = -60;
+    dirLight.shadow.camera.right = 60;
+    dirLight.shadow.camera.top = 60;
+    dirLight.shadow.camera.bottom = -60;
     scene.add(dirLight);
+
+    // Additional fill lights
+    const fillLight1 = new THREE.DirectionalLight(0x00bfff, 0.4);
+    fillLight1.position.set(-30, 30, -30);
+    scene.add(fillLight1);
+
+    const fillLight2 = new THREE.DirectionalLight(0xff6b6b, 0.3);
+    fillLight2.position.set(0, 40, -40);
+    scene.add(fillLight2);
 
     // Physics setup
     const world = new PhysicsWorld();
-
-    // Spawn shapes menu
-    const spawnShapes = [
-      {name:'Sphere', type:SHAPE_TYPE.SPHERE},
-      {name:'Box', type:SHAPE_TYPE.BOX},
-      {name:'Cylinder', type:SHAPE_TYPE.CYLINDER}
-    ];
-    const spawnShapeSelect = document.getElementById('spawn-shape');
-    function updateSpawnShapeOptions() {
-      spawnShapeSelect.innerHTML = '';
-      for(const s of spawnShapes) {
-        let opt = document.createElement('option');
-        opt.value = s.name;
-        opt.textContent = s.name;
-        spawnShapeSelect.appendChild(opt);
-      }
-    }
-    updateSpawnShapeOptions();
 
     // File/model loading
     const gltfLoader = new GLTFLoader();
@@ -384,41 +593,55 @@
       }
     });
 
-    // --- IMPROVEMENT: spawnBody now accepts a position ---
-    function spawnBody(shapeName, position = new Vec3(0,5,0)) {
-      let shapeDef = spawnShapes.find(s => s.name===shapeName);
-      if(!shapeDef) return;
+    // --- spawnBody ---
+    function spawnBody(shapeName, position = new Vec3(0, 10, 0)) {
       let mesh, shape, mass;
-      if(shapeDef.type===SHAPE_TYPE.SPHERE) {
-        let radius = 0.4 + Math.random()*0.3;
+      if(shapeName === 'Sphere') {
+        let radius = 0.5 + Math.random()*0.8;
         shape = new SphereShape(radius);
+        const colors = [0x00bfff, 0xff6b6b, 0x4ecdc4, 0xffd166, 0x6a0572, 0xff9ff3, 0x54a0ff];
         mesh = new THREE.Mesh(
-          new THREE.SphereGeometry(radius, 24, 16),
-          new THREE.MeshStandardMaterial({color:0x00bfff})
-        );
-        mass = 1;
-      } else if(shapeDef.type===SHAPE_TYPE.BOX) {
-        let size = 0.4 + Math.random()*0.4;
-        shape = new BoxShape(size);
-        mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(size, size, size),
-          new THREE.MeshStandardMaterial({color:0xffa600})
-        );
-        mass = 1.5;
-      } else if(shapeDef.type===SHAPE_TYPE.CYLINDER) {
-        let radius = 0.3 + Math.random()*0.3, height = 0.8 + Math.random()*0.8;
-        shape = new CylinderShape(radius, height);
-        mesh = new THREE.Mesh(
-          new THREE.CylinderGeometry(radius, radius, height, 20),
-          new THREE.MeshStandardMaterial({color:0x2ecc40})
+          new THREE.SphereGeometry(radius, 48, 32),
+          new THREE.MeshStandardMaterial({
+            color: colors[Math.floor(Math.random() * colors.length)],
+            roughness: 0.2,
+            metalness: 0.8
+          })
         );
         mass = 2;
+      } else if(shapeName === 'Box') {
+        let size = 0.6 + Math.random()*0.8;
+        shape = new BoxShape(size);
+        const colors = [0xffa600, 0xff6347, 0x9b59b6, 0x27ae60, 0xe74c3c, 0xfeca57, 0x5f27cd];
+        mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(size, size, size),
+          new THREE.MeshStandardMaterial({
+            color: colors[Math.floor(Math.random() * colors.length)],
+            roughness: 0.3,
+            metalness: 0.7
+          })
+        );
+        mass = 3;
+      } else if(shapeName === 'Cylinder') {
+        let radius = 0.4 + Math.random()*0.5, height = 1.0 + Math.random()*1.5;
+        shape = new CylinderShape(radius, height);
+        const colors = [0x2ecc40, 0x3498db, 0xf39c12, 0xe67e22, 0x1abc9c, 0x1dd1a1, 0xa55eea];
+        mesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(radius, radius, height, 48),
+          new THREE.MeshStandardMaterial({
+            color: colors[Math.floor(Math.random() * colors.length)],
+            roughness: 0.4,
+            metalness: 0.5
+          })
+        );
+        mass = 4;
       }
       mesh.position.set(position.x, position.y, position.z);
       mesh.castShadow = true;
+      mesh.receiveShadow = true;
       scene.add(mesh);
       let rb = new RigidBody(position, shape, mass, mesh);
-      rb.angularVelocity = new Vec3(Math.random()*2-1, Math.random()*2-1, Math.random()*2-1);
+      rb.angularVelocity = new Vec3(Math.random()*3-1.5, Math.random()*3-1.5, Math.random()*3-1.5);
       rb.friction = Number(document.getElementById('friction-slider').value);
       rb.restitution = Number(document.getElementById('restitution-slider').value);
       world.addBody(rb);
@@ -427,15 +650,46 @@
 
     // --- UI Event Listeners ---
     let gravitySlider = document.getElementById('gravity-slider');
-    gravitySlider.addEventListener('input', () => world.gravity.y = Number(gravitySlider.value));
+    gravitySlider.addEventListener('input', () => {
+      world.gravity.y = Number(gravitySlider.value);
+      document.getElementById('gravity-value').textContent = world.gravity.y;
+    });
     
     let timescaleSlider = document.getElementById('timescale-slider');
     let timeScale = 1;
-    timescaleSlider.addEventListener('input', () => timeScale = Number(timescaleSlider.value));
+    timescaleSlider.addEventListener('input', () => {
+      timeScale = Number(timescaleSlider.value);
+      document.getElementById('timescale-value').textContent = timeScale.toFixed(2);
+    });
+
+    // Friction and restitution value updates
+    document.getElementById('friction-slider').addEventListener('input', e => {
+      const value = Number(e.target.value);
+      document.getElementById('friction-value').textContent = value.toFixed(2);
+      if(selectedBody) selectedBody.friction = value;
+      updateObjectInfo();
+    });
+    
+    document.getElementById('restitution-slider').addEventListener('input', e => {
+      const value = Number(e.target.value);
+      document.getElementById('restitution-value').textContent = value.toFixed(2);
+      if(selectedBody) selectedBody.restitution = value;
+      updateObjectInfo();
+    });
 
     document.getElementById('shoot-btn').addEventListener('click', () => {
-      let newBody = spawnBody(spawnShapeSelect.value, new Vec3(0, 5, 0));
-      if(newBody) newBody.velocity = new Vec3(0,0,-12);
+      let newBody = spawnBody(document.getElementById('spawn-shape').value, new Vec3(0, 10, 0));
+      if(newBody) newBody.velocity = new Vec3(0, 0, -20);
+    });
+
+    document.getElementById('spawn-random-btn').addEventListener('click', () => {
+      const shapes = ['Sphere', 'Box', 'Cylinder'];
+      const randomShape = shapes[Math.floor(Math.random() * shapes.length)];
+      // Spawn in random position within the world bounds
+      const x = (Math.random() - 0.5) * 80;
+      const z = (Math.random() - 0.5) * 80;
+      const y = 15 + Math.random() * 20;
+      spawnBody(randomShape, new Vec3(x, y, z));
     });
 
     document.getElementById('reset-btn').addEventListener('click', () => {
@@ -457,39 +711,132 @@
       document.getElementById('resume-btn').style.display='none';
     };
 
-    document.getElementById('cam-front-btn').onclick = () => { camera.position.set(0,8,16); controls.target.set(0,0,0); };
-    document.getElementById('cam-top-btn').onclick = () => { camera.position.set(0,20,0.1); controls.target.set(0,0,0); };
-    document.getElementById('cam-side-btn').onclick = () => { camera.position.set(16,8,0); controls.target.set(0,0,0); };
+    document.getElementById('cam-front-btn').onclick = () => { 
+      camera.position.set(0, 25, 50); 
+      controls.target.set(0, 0, 0); 
+      controls.update();
+    };
+    document.getElementById('cam-top-btn').onclick = () => { 
+      camera.position.set(0, 80, 0.1); 
+      controls.target.set(0, 0, 0); 
+      controls.update();
+    };
+    document.getElementById('cam-side-btn').onclick = () => { 
+      camera.position.set(50, 25, 0); 
+      controls.target.set(0, 0, 0); 
+      controls.update();
+    };
+    document.getElementById('cam-orbit-btn').onclick = () => { 
+      camera.position.set(0, 25, 50); 
+      controls.target.set(0, 0, 0); 
+      controls.enable = true;
+      controls.update();
+    };
 
     document.getElementById('reset-object-btn').onclick = () => {
       if(selectedBody) {
-        selectedBody.position = new Vec3(0,5,0);
+        selectedBody.position = new Vec3(0, 10, 0);
         selectedBody.velocity = Vec3.zero();
         selectedBody.angularVelocity = Vec3.zero();
-        selectedBody.mesh.position.set(0,5,0);
-        selectedBody.mesh.rotation.set(0,0,0);
+        selectedBody.mesh.position.set(0, 10, 0);
+        selectedBody.mesh.rotation.set(0, 0, 0);
         updateObjectInfo();
       }
     };
     
-    // --- Save/Load (unchanged) ---
+    // --- Save/Load Scene ---
     document.getElementById('save-btn').addEventListener('click', () => {
       let data = world.bodies.map(b => ({
-        type: b.shape.type, position: [b.position.x, b.position.y, b.position.z], velocity: [b.velocity.x, b.velocity.y, b.velocity.z],
-        angularVelocity: [b.angularVelocity.x, b.angularVelocity.y, b.angularVelocity.z], mass: b.mass, friction: b.friction, restitution: b.restitution,
-        size: b.shape.size || b.shape.radius, height: b.shape.height, color: b.mesh.material.color.getHex()
+        type: b.shape.type, 
+        position: [b.position.x, b.position.y, b.position.z], 
+        velocity: [b.velocity.x, b.velocity.y, b.velocity.z],
+        angularVelocity: [b.angularVelocity.x, b.angularVelocity.y, b.angularVelocity.z], 
+        mass: b.mass, 
+        friction: b.friction, 
+        restitution: b.restitution,
+        size: b.shape.size || b.shape.radius, 
+        height: b.shape.height, 
+        color: b.mesh.material.color.getHex()
       }));
-      let blob = new Blob([JSON.stringify(data)], {type:'application/json'});
+      let blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
       let a = document.createElement('a');
-      a.href = URL.createObjectURL(blob); a.download = 'sandbox-scene.json'; a.click();
+      a.href = URL.createObjectURL(blob); 
+      a.download = 'approx-sandbox-scene.json'; 
+      a.click();
     });
 
     document.getElementById('import-btn').onclick = () => document.getElementById('import-scene-input').click();
-    // ... rest of save/load code is unchanged ...
-
-    // --- Material Sliders (unchanged) ---
-    document.getElementById('friction-slider').addEventListener('input', e => { if(selectedBody) selectedBody.friction = Number(e.target.value); updateObjectInfo(); });
-    document.getElementById('restitution-slider').addEventListener('input', e => { if(selectedBody) selectedBody.restitution = Number(e.target.value); updateObjectInfo(); });
+    document.getElementById('import-scene-input').addEventListener('change', e => {
+      if(e.target.files.length === 0) return;
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          world.bodies.forEach(b => scene.remove(b.mesh));
+          world.bodies = [];
+          selectedBody = null;
+          
+          data.forEach(item => {
+            let mesh, shape;
+            if(item.type === SHAPE_TYPE.SPHERE) {
+              shape = new SphereShape(item.size);
+              mesh = new THREE.Mesh(
+                new THREE.SphereGeometry(item.size, 48, 32),
+                new THREE.MeshStandardMaterial({
+                  color: item.color,
+                  roughness: 0.2,
+                  metalness: 0.8
+                })
+              );
+            } else if(item.type === SHAPE_TYPE.BOX) {
+              shape = new BoxShape(item.size);
+              mesh = new THREE.Mesh(
+                new THREE.BoxGeometry(item.size, item.size, item.size),
+                new THREE.MeshStandardMaterial({
+                  color: item.color,
+                  roughness: 0.3,
+                  metalness: 0.7
+                })
+              );
+            } else if(item.type === SHAPE_TYPE.CYLINDER) {
+              shape = new CylinderShape(item.size, item.height);
+              mesh = new THREE.Mesh(
+                new THREE.CylinderGeometry(item.size, item.size, item.height, 48),
+                new THREE.MeshStandardMaterial({
+                  color: item.color,
+                  roughness: 0.4,
+                  metalness: 0.5
+                })
+              );
+            }
+            
+            if(mesh) {
+              mesh.position.set(item.position[0], item.position[1], item.position[2]);
+              mesh.castShadow = true;
+              mesh.receiveShadow = true;
+              scene.add(mesh);
+              let rb = new RigidBody(
+                new Vec3(item.position[0], item.position[1], item.position[2]), 
+                shape, 
+                item.mass, 
+                mesh
+              );
+              rb.velocity = new Vec3(item.velocity[0], item.velocity[1], item.velocity[2]);
+              rb.angularVelocity = new Vec3(item.angularVelocity[0], item.angularVelocity[1], item.angularVelocity[2]);
+              rb.friction = item.friction;
+              rb.restitution = item.restitution;
+              world.addBody(rb);
+            }
+          });
+          updateObjectInfo();
+        } catch (error) {
+          console.error('Error loading scene:', error);
+          alert('Error loading scene file');
+        }
+      };
+      reader.readAsText(file);
+    });
 
     // --- User Interaction Logic ---
     let selectedBody = null;
@@ -500,18 +847,23 @@
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    // Invisible plane for painting on
+    // Invisible plane for painting on (larger to match world)
     const paintPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(100, 100),
+      new THREE.PlaneGeometry(200, 200),
       new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide })
     );
-    paintPlane.rotateX(-Math.PI / 2); // Align with ground
+    paintPlane.rotation.x = -Math.PI / 2;
     scene.add(paintPlane);
 
     document.getElementById('paint-btn').addEventListener('click', () => {
         paintMode = !paintMode;
         document.getElementById('paint-btn').classList.toggle('active', paintMode);
-        controls.enabled = !paintMode; // Disable camera controls in paint mode
+        controls.enabled = !paintMode;
+        if(paintMode) {
+          document.getElementById('paint-btn').textContent = '🎨 Painting';
+        } else {
+          document.getElementById('paint-btn').textContent = '🎨 Paint Mode';
+        }
     });
 
     function getMouseIntersection() {
@@ -528,22 +880,26 @@
         controls.enabled = false;
         const point = getMouseIntersection();
         if (point) {
-          spawnBody(spawnShapeSelect.value, new Vec3(point.x, point.y + 1, point.z));
+          spawnBody(document.getElementById('spawn-shape').value, new Vec3(point.x, point.y + 2, point.z));
           lastPaintPoint.copy(point);
         }
       } else {
         // Object Selection
         raycaster.setFromCamera(mouse, camera);
         const intersects = raycaster.intersectObjects(scene.children, true);
-        if(selectedBody?.mesh) selectedBody.mesh.material.emissive?.setHex(0x000000);
+        if(selectedBody?.mesh) {
+          selectedBody.mesh.material.emissive?.setHex(0x000000);
+          selectedBody.mesh.material.color.setHex(selectedBody.originalColor || 0xffffff);
+        }
         selectedBody = null;
 
         if(intersects.length) {
           const mesh = intersects[0].object;
           selectedBody = world.bodies.find(b => b.mesh === mesh);
           if(selectedBody) {
+            selectedBody.originalColor = selectedBody.mesh.material.color.getHex();
             selectedBody.mesh.material.emissive?.setHex(0x00ff40);
-            draggingBody = selectedBody; // Allow dragging selected object
+            draggingBody = selectedBody;
             controls.enabled = false;
           }
         }
@@ -556,16 +912,17 @@
       
       if (paintMode && isPainting) {
         const point = getMouseIntersection();
-        if (point && point.distanceTo(lastPaintPoint) > 1.0) { // Only paint if mouse moved enough
-          spawnBody(spawnShapeSelect.value, new Vec3(point.x, point.y + 1, point.z));
+        if (point && point.distanceTo(lastPaintPoint) > 1.2) {
+          spawnBody(document.getElementById('spawn-shape').value, new Vec3(point.x, point.y + 2, point.z));
           lastPaintPoint.copy(point);
         }
       } else if (draggingBody) {
         const point = getMouseIntersection();
         if (point) {
           draggingBody.position.x = point.x;
-          draggingBody.position.z = point.z; // Drag along the plane
+          draggingBody.position.z = point.z;
           draggingBody.velocity = Vec3.zero();
+          draggingBody.mesh.position.set(point.x, draggingBody.position.y, point.z);
         }
       }
     });
@@ -581,14 +938,15 @@
     function updateObjectInfo() {
       const infoDiv = document.getElementById('object-info');
       if(selectedBody) {
+        const shapeNames = {0: 'Sphere', 1: 'Box', 2: 'Cylinder', 3: 'Custom'};
         infoDiv.innerHTML = `
           <b>Selected Object</b><br>
-          Type: ${Object.keys(SHAPE_TYPE).find(k=>SHAPE_TYPE[k]===selectedBody.shape.type)}<br>
+          Type: ${shapeNames[selectedBody.shape.type] || 'Unknown'}<br>
           Mass: ${selectedBody.mass.toFixed(2)}<br>
-          Pos: (${selectedBody.position.x.toFixed(2)}, ${selectedBody.position.y.toFixed(2)}, ${selectedBody.position.z.toFixed(2)})<br>
+          Position: (${selectedBody.position.x.toFixed(2)}, ${selectedBody.position.y.toFixed(2)}, ${selectedBody.position.z.toFixed(2)})<br>
           Velocity: ${selectedBody.velocity.length().toFixed(2)}<br>
-          Friction: ${selectedBody.friction}<br>
-          Restitution: ${selectedBody.restitution}<br>
+          Friction: ${selectedBody.friction.toFixed(2)}<br>
+          Restitution: ${selectedBody.restitution.toFixed(2)}<br>
         `;
       } else {
         infoDiv.innerHTML = '';
@@ -599,21 +957,31 @@
     let lastTime = performance.now(), frameCount = 0, lastStatsTime = performance.now();
     function animate() {
       requestAnimationFrame(animate);
-      if(paused) { renderer.render(scene, camera); return; }
+      if(paused) { 
+        renderer.render(scene, camera); 
+        return; 
+      }
       let now = performance.now();
-      let dt = Math.min(0.05, (now-lastTime)/1000) * timeScale; // Capped dt for stability
+      let dt = Math.min(0.033, (now-lastTime)/1000) * timeScale;
       lastTime = now;
       world.update(dt);
       controls.update();
       renderer.render(scene, camera);
       frameCount++;
       if(now-lastStatsTime > 1000) {
-        document.getElementById('stats').textContent =
-          `FPS: ${frameCount} | Bodies: ${world.bodies.length} | Collisions: ${world.collisionCount} | Gravity: ${world.gravity.y} | TimeScale: ${timeScale.toFixed(2)}`;
+        document.getElementById('stats').innerHTML = `
+          <strong>Performance & World Stats</strong><br>
+          FPS: ${frameCount}<br>
+          Bodies: ${world.bodies.length}<br>
+          Collisions: ${world.collisionCount}<br>
+          Gravity: ${world.gravity.y}<br>
+          Time Scale: ${timeScale.toFixed(2)}<br>
+          World: 100×100×100 units
+        `;
         frameCount = 0;
         lastStatsTime = now;
       }
-      if(selectedBody) updateObjectInfo(); // Live update info for selected body
+      if(selectedBody) updateObjectInfo();
     }
 
     // --- UI Sidebar/Overlay ---
@@ -632,6 +1000,11 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
+    // Initialize slider value displays
+    document.getElementById('gravity-value').textContent = gravitySlider.value;
+    document.getElementById('timescale-value').textContent = timescaleSlider.value;
+    document.getElementById('friction-value').textContent = document.getElementById('friction-slider').value;
+    document.getElementById('restitution-value').textContent = document.getElementById('restitution-slider').value;
   </script>
 </body>
 </html>
