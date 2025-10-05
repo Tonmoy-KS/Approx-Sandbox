@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Approx Sandbox - 3D Physics Engine — V.1.6.0</title>
+  <title>Approx Sandbox - 3D Physics Engine — V.1.7.0</title>
   <style>
     body { margin: 0; overflow: hidden; background: #0a0f1a; font-family: 'Segoe UI', system-ui, sans-serif; }
     canvas { display: block; }
@@ -236,7 +236,7 @@
   <div id="loading-overlay">
     <div id="loading-box">
       <h2>Approx Sandbox</h2>
-      <p>3D Physics Engine V.1.6.0<br>
+      <p>3D Physics Engine<br>
          Drag & Drop GLB/GLTF models, or click Start to begin.</p>
       <input type="file" id="model-input" accept=".glb,.gltf" multiple>
       <ul id="file-list" class="file-list"></ul>
@@ -294,6 +294,7 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    
     // --- Vector/Quaternion/Shape ---
     class Vec3 {
       constructor(x=0, y=0, z=0) { this.x=x; this.y=y; this.z=z;}
@@ -303,17 +304,152 @@
       dot(v) { return this.x*v.x + this.y*v.y + this.z*v.z;}
       cross(v) { return new Vec3(this.y*v.z - this.z*v.y, this.z*v.x - this.x*v.z, this.x*v.y - this.y*v.x); }
       length() { return Math.sqrt(this.x*this.x+this.y*this.y+this.z*this.z);}
+      lengthSq() { return this.x*this.x+this.y*this.y+this.z*this.z;}
       normalize() { const l=this.length(); return l===0?new Vec3():this.mul(1/l);}
       copy() { return new Vec3(this.x,this.y,this.z);}
       set(x, y, z) {this.x=x;this.y=y;this.z=z;}
       static zero() { return new Vec3(0,0,0);}
+      static fromArray(arr) { return new Vec3(arr[0], arr[1], arr[2]); }
     }
-    class Quaternion { // Minimal placeholder for orientation
-      constructor(x=0,y=0,z=0,w=1){this.x=x;this.y=y;this.z=z;this.w=w;}
+    
+    class Quaternion {
+      constructor(x=0,y=0,z=0,w=1){
+        this.x=x;this.y=y;this.z=z;this.w=w;
+      }
+      
+      // Multiply quaternion by another quaternion
+      multiply(q) {
+        return new Quaternion(
+          this.w * q.x + this.x * q.w + this.y * q.z - this.z * q.y,
+          this.w * q.y + this.y * q.w + this.z * q.x - this.x * q.z,
+          this.w * q.z + this.z * q.w + this.x * q.y - this.y * q.x,
+          this.w * q.w - this.x * q.x - this.y * q.y - this.z * q.z
+        );
+      }
+      
+      // Rotate a vector by this quaternion
+      rotateVector(v) {
+        const x = this.x, y = this.y, z = this.z, w = this.w;
+        const ix = w * v.x + y * v.z - z * v.y;
+        const iy = w * v.y + z * v.x - x * v.z;
+        const iz = w * v.z + x * v.y - y * v.x;
+        const iw = -x * v.x - y * v.y - z * v.z;
+        
+        return new Vec3(
+          ix * w + iw * -x + iy * -z - iz * -y,
+          iy * w + iw * -y + iz * -x - ix * -z,
+          iz * w + iw * -z + ix * -y - iy * -x
+        );
+      }
+      
+      // Create quaternion from axis-angle
+      static fromAxisAngle(axis, angle) {
+        const halfAngle = angle / 2;
+        const s = Math.sin(halfAngle);
+        return new Quaternion(
+          axis.x * s,
+          axis.y * s,
+          axis.z * s,
+          Math.cos(halfAngle)
+        );
+      }
+      
+      // Create identity quaternion
+      static identity() {
+        return new Quaternion(0, 0, 0, 1);
+      }
+      
+      // Slerp interpolation between two quaternions
+      slerp(q, t) {
+        let dot = this.x*q.x + this.y*q.y + this.z*q.z + this.w*q.w;
+        
+        // If the dot product is negative, the quaternions have opposite handed-ness
+        let q2 = q;
+        if (dot < 0.0) {
+          q2 = new Quaternion(-q.x, -q.y, -q.z, -q.w);
+          dot = -dot;
+        }
+        
+        // If the inputs are too close, use linear interpolation
+        if (dot > 0.9995) {
+          return new Quaternion(
+            this.x + t * (q2.x - this.x),
+            this.y + t * (q2.y - this.y),
+            this.z + t * (q2.z - this.z),
+            this.w + t * (q2.w - this.w)
+          ).normalize();
+        }
+        
+        // Calculate angle between quaternions
+        const theta_0 = Math.acos(dot);
+        const theta = theta_0 * t;
+        const sin_theta = Math.sin(theta);
+        const sin_theta_0 = Math.sin(theta_0);
+        
+        const s0 = Math.cos(theta) - dot * sin_theta / sin_theta_0;
+        const s1 = sin_theta / sin_theta_0;
+        
+        return new Quaternion(
+          s0 * this.x + s1 * q2.x,
+          s0 * this.y + s1 * q2.y,
+          s0 * this.z + s1 * q2.z,
+          s0 * this.w + s1 * q2.w
+        );
+      }
+      
+      // Normalize quaternion
+      normalize() {
+        const length = Math.sqrt(this.x*this.x + this.y*this.y + this.z*this.z + this.w*this.w);
+        if (length > 0) {
+          return new Quaternion(
+            this.x / length,
+            this.y / length,
+            this.z / length,
+            this.w / length
+          );
+        }
+        return new Quaternion(0, 0, 0, 1);
+      }
+      
+      // Convert to Euler angles (XYZ order)
+      toEuler() {
+        const x = this.x, y = this.y, z = this.z, w = this.w;
+        const sinr_cosp = 2 * (w * x + y * z);
+        const cosr_cosp = 1 - 2 * (x * x + y * y);
+        const roll = Math.atan2(sinr_cosp, cosr_cosp);
+        
+        const sinp = 2 * (w * y - z * x);
+        let pitch;
+        if (Math.abs(sinp) >= 1) {
+          pitch = Math.sign(sinp) * Math.PI / 2;
+        } else {
+          pitch = Math.asin(sinp);
+        }
+        
+        const siny_cosp = 2 * (w * z + x * y);
+        const cosy_cosp = 1 - 2 * (y * y + z * z);
+        const yaw = Math.atan2(siny_cosp, cosy_cosp);
+        
+        return new Vec3(roll, pitch, yaw);
+      }
     }
+    
     const SHAPE_TYPE = { SPHERE:0, BOX:1, CYLINDER:2, CUSTOM:3 };
-    class SphereShape { constructor(radius) { this.type=SHAPE_TYPE.SPHERE; this.radius=radius; } }
-    class BoxShape { constructor(size) { this.type=SHAPE_TYPE.BOX; this.size=size; } }
+    
+    class SphereShape { 
+      constructor(radius) { 
+        this.type = SHAPE_TYPE.SPHERE; 
+        this.radius = radius; 
+      }
+    }
+    
+    class BoxShape { 
+      constructor(size) { 
+        this.type = SHAPE_TYPE.BOX; 
+        this.size = size; 
+      }
+    }
+    
     class CylinderShape {
       constructor(radius=1, height=2) {
         this.type = SHAPE_TYPE.CYLINDER;
@@ -321,12 +457,14 @@
         this.height = height;
       }
     }
+    
     class CompoundShape {
       constructor(shapes) {
         this.type = SHAPE_TYPE.CUSTOM;
         this.shapes = shapes; // array of {shape, offset}
       }
     }
+    
     // --- Rigid Body ---
     class RigidBody {
       constructor(position, shape, mass, mesh) {
@@ -340,48 +478,96 @@
         this.restitution = 0.4;
         this.friction = 0.3;
         this.angularVelocity = Vec3.zero();
-        this.orientation = new Quaternion();
+        this.orientation = Quaternion.identity();
         this.torque = Vec3.zero();
-        this.isSun = false;
-        if (mass > 0) {
-            if (shape.type === SHAPE_TYPE.SPHERE) {
-                const i = (2/5) * mass * shape.radius * shape.radius;
-                this.invInertia = 1 / i;
-            } else if (shape.type === SHAPE_TYPE.BOX) {
-                const i = (1/12) * mass * (shape.size*shape.size + shape.size*shape.size);
-                this.invInertia = 1 / i;
-            } else if (shape.type === SHAPE_TYPE.CYLINDER) {
-                const i = (1/2) * mass * shape.radius * shape.radius;
-                this.invInertia = 1/i;
-            } else {
-                this.invInertia = 1; // Default fallback
-            }
+        
+        // Calculate inertia tensor based on shape
+        this.inertiaTensor = this.calculateInertiaTensor(mass);
+        this.invInertiaTensor = this.invertInertiaTensor(this.inertiaTensor);
+        
+        // Store original color for highlighting
+        this.originalColor = mesh.material.color.getHex();
+      }
+      
+      calculateInertiaTensor(mass) {
+        if (this.shape.type === SHAPE_TYPE.SPHERE) {
+          // Solid sphere: I = (2/5) * m * r^2
+          const i = (2/5) * mass * this.shape.radius * this.shape.radius;
+          return new Vec3(i, i, i);
+        } else if (this.shape.type === SHAPE_TYPE.BOX) {
+          // Solid box: I = (1/12) * m * (h^2 + d^2) for each axis
+          const s = this.shape.size;
+          const i = (1/12) * mass * (s*s + s*s);
+          return new Vec3(i, i, i);
+        } else if (this.shape.type === SHAPE_TYPE.CYLINDER) {
+          // Solid cylinder: I_x = I_y = (1/12)*m*(3r^2 + h^2), I_z = (1/2)*m*r^2
+          const r = this.shape.radius;
+          const h = this.shape.height;
+          const ix = (1/12) * mass * (3*r*r + h*h);
+          const iz = (1/2) * mass * r*r;
+          return new Vec3(ix, ix, iz);
         } else {
-            this.invInertia = 0;
+          // Default for compound shapes - approximate as sphere
+          return new Vec3(1, 1, 1);
         }
       }
-      applyForce(f) { this.force = this.force.add(f); }
-      applyTorque(t) { this.torque = this.torque.add(t); }
+      
+      invertInertiaTensor(tensor) {
+        return new Vec3(
+          tensor.x > 0 ? 1/tensor.x : 0,
+          tensor.y > 0 ? 1/tensor.y : 0,
+          tensor.z > 0 ? 1/tensor.z : 0
+        );
+      }
+      
+      applyForce(f) { 
+        this.force = this.force.add(f); 
+      }
+      
+      applyTorque(t) { 
+        this.torque = this.torque.add(t); 
+      }
+      
       integrate(dt) {
         if(this.invMass===0) return;
-        // linear
-        this.velocity = this.velocity.add(this.force.mul(dt*this.invMass));
+        
+        // Linear motion
+        this.velocity = this.velocity.add(this.force.mul(dt * this.invMass));
         this.position = this.position.add(this.velocity.mul(dt));
-        // angular
-        this.angularVelocity = this.angularVelocity.add(this.torque.mul(dt * this.invInertia));
+        
+        // Angular motion
+        // Transform torque to local space
+        const localTorque = this.orientation.rotateVector(this.torque);
+        const localAngularAccel = new Vec3(
+          localTorque.x * this.invInertiaTensor.x,
+          localTorque.y * this.invInertiaTensor.y,
+          localTorque.z * this.invInertiaTensor.z
+        );
+        const worldAngularAccel = this.orientation.rotateVector(localAngularAccel);
+        this.angularVelocity = this.angularVelocity.add(worldAngularAccel.mul(dt));
+        
+        // Update orientation using angular velocity
+        const axis = this.angularVelocity.normalize();
+        const angle = this.angularVelocity.length() * dt;
+        if (angle > 0.0001) {
+          const rotation = Quaternion.fromAxisAngle(axis, angle);
+          this.orientation = rotation.multiply(this.orientation).normalize();
+        }
+        
+        // Update mesh position and rotation
         if(this.mesh) {
           this.mesh.position.set(this.position.x, this.position.y, this.position.z);
-          if(this.angularVelocity.length() > 0.0001) {
-            // NOTE: Proper rotation requires quaternion integration. This is a visual approximation.
-            this.mesh.rotateX(this.angularVelocity.x * dt);
-            this.mesh.rotateY(this.angularVelocity.y * dt);
-            this.mesh.rotateZ(this.angularVelocity.z * dt);
-          }
+          
+          // Convert quaternion to Euler angles for Three.js
+          const e = this.orientation.toEuler();
+          this.mesh.rotation.set(e.x, e.y, e.z);
         }
+        
         this.force = Vec3.zero();
         this.torque = Vec3.zero();
       }
     }
+    
     // --- Physics World ---
     class PhysicsWorld {
       constructor() {
@@ -392,8 +578,10 @@
         this.orbitMode = false;
         this.sunGravity = 50;
       }
+      
       addBody(b) { this.bodies.push(b);}
       removeBody(b) { const i=this.bodies.indexOf(b); if(i>-1) this.bodies.splice(i,1);}
+      
       setWorldSize(size) {
         this.bounds = {x:size, y:size, z:size};
         ground.geometry = new THREE.PlaneGeometry(size, size);
@@ -402,17 +590,11 @@
         boundsBox.geometry = new THREE.BoxGeometry(size, size, size);
         boundsBox.position.set(0, size/2, 0);
       }
+      
       update(dt) {
         this.collisionCount = 0;
-        // Broadphase spatial hash with larger grid
-        let grid = {};
-        for(const b of this.bodies) {
-          let key = `${Math.floor(b.position.x/2)}:${Math.floor(b.position.y/2)}:${Math.floor(b.position.z/2)}`;
-          if(!grid[key]) grid[key]=[];
-          grid[key].push(b);
-        }
-
-        // Apply forces
+        
+        // Apply gravity and integrate
         for(const b of this.bodies) {
           if (this.orbitMode && !b.isSun) {
             // Apply sun gravity if sun exists
@@ -431,41 +613,56 @@
           }
           b.integrate(dt);
         }
-
-        // Boundary handling
+        
+        // Broadphase spatial hash
+        let grid = {};
+        const gridSize = 5;
         for(const b of this.bodies) {
-          if (b.isSun) continue;
-          let halfSize = 0;
-          if (b.shape.type === SHAPE_TYPE.SPHERE) halfSize = b.shape.radius;
-          else if (b.shape.type === SHAPE_TYPE.BOX) halfSize = b.shape.size / 2;
-          else if (b.shape.type === SHAPE_TYPE.CYLINDER) halfSize = b.shape.height / 2;
-
-          if (!this.orbitMode) {
-            // Ground collision (y = 0)
+          let key = `${Math.floor(b.position.x/gridSize)}:${Math.floor(b.position.y/gridSize)}:${Math.floor(b.position.z/gridSize)}`;
+          if(!grid[key]) grid[key]=[];
+          grid[key].push(b);
+        }
+        
+        // Ground collision (y = 0) - only in non-orbit mode
+        if (!this.orbitMode) {
+          for(const b of this.bodies) {
+            let halfSize = 0;
+            if (b.shape.type === SHAPE_TYPE.SPHERE) halfSize = b.shape.radius;
+            else if (b.shape.type === SHAPE_TYPE.BOX) halfSize = b.shape.size / 2;
+            else if (b.shape.type === SHAPE_TYPE.CYLINDER) halfSize = b.shape.height / 2;
+            
             if(b.position.y < halfSize) {
               b.position.y = halfSize;
               b.velocity.y = -b.velocity.y * b.restitution;
               b.velocity.x *= (1 - b.friction);
               b.velocity.z *= (1 - b.friction);
+              
+              // Apply angular damping on ground contact
+              b.angularVelocity = b.angularVelocity.mul(0.95);
             }
-            // Wall/Ceiling collisions
+            
+            // Wall collisions
             for(const axis of ['x','z']) {
-                if(b.position[axis] < -this.bounds[axis]/2 + halfSize) {
-                  b.position[axis] = -this.bounds[axis]/2 + halfSize;
-                  b.velocity[axis] = -b.velocity[axis]*b.restitution;
-                }
-                if(b.position[axis] > this.bounds[axis]/2 - halfSize) {
-                  b.position[axis] = this.bounds[axis]/2 - halfSize;
-                  b.velocity[axis] = -b.velocity[axis]*b.restitution;
-                }
+              if(b.position[axis] < -this.bounds[axis]/2 + halfSize) {
+                b.position[axis] = -this.bounds[axis]/2 + halfSize;
+                b.velocity[axis] = -b.velocity[axis] * b.restitution;
+              }
+              if(b.position[axis] > this.bounds[axis]/2 - halfSize) {
+                b.position[axis] = this.bounds[axis]/2 - halfSize;
+                b.velocity[axis] = -b.velocity[axis] * b.restitution;
+              }
             }
+            
             // Ceiling collision
             if(b.position.y > this.bounds.y - halfSize) {
               b.position.y = this.bounds.y - halfSize;
-              b.velocity.y = -b.velocity.y*b.restitution;
+              b.velocity.y = -b.velocity.y * b.restitution;
             }
-          } else {
-            // In orbit mode, wrap around world bounds
+          }
+        } else {
+          // In orbit mode, wrap around world bounds
+          for(const b of this.bodies) {
+            if (b.isSun) continue;
             for(const axis of ['x','y','z']) {
               if(b.position[axis] < -this.bounds[axis]/2) {
                 b.position[axis] += this.bounds[axis];
@@ -476,91 +673,517 @@
             }
           }
         }
-
-        // Object collisions (only within same grid cell)
+        
+        // Narrowphase collision detection and response
         for(const cell in grid) {
           let cellBodies = grid[cell];
           for(let i=0;i<cellBodies.length;i++) {
             let a=cellBodies[i];
             for(let j=i+1;j<cellBodies.length;j++) {
               let b=cellBodies[j];
-              if(a.shape.type===SHAPE_TYPE.SPHERE && b.shape.type===SHAPE_TYPE.SPHERE) {
-                const d = a.position.sub(b.position);
-                const distSqr = d.dot(d);
-                const minDist = a.shape.radius + b.shape.radius;
-                if(distSqr < minDist * minDist && distSqr > 0) {
-                  const dist = Math.sqrt(distSqr);
-                  const norm = d.mul(1 / dist);
-                  const penetration = minDist - dist;
-                  // 1. Resolve penetration
-                  const resolveAmount = penetration * 0.8; // Positional correction factor
-                  a.position = a.position.add(norm.mul(resolveAmount * a.invMass / (a.invMass + b.invMass)));
-                  b.position = b.position.sub(norm.mul(resolveAmount * b.invMass / (a.invMass + b.invMass)));
-                  // 2. Calculate impulse
-                  const ra = norm.mul(-a.shape.radius); // Vector from center to contact point
-                  const rb = norm.mul(b.shape.radius);
-                  const va = a.velocity.add(a.angularVelocity.cross(ra));
-                  const vb = b.velocity.add(b.angularVelocity.cross(rb));
-                  const relVel = va.sub(vb);
-                  const velAlongNormal = relVel.dot(norm);
-                  if (velAlongNormal > 0) continue; // They are already moving apart
-                  const e = Math.min(a.restitution, b.restitution);
-                  const term1 = a.invMass + b.invMass;
-                  const term2 = ra.cross(norm).cross(ra).mul(a.invInertia).dot(norm);
-                  const term3 = rb.cross(norm).cross(rb).mul(b.invInertia).dot(norm);
-                  const j = (-(1 + e) * velAlongNormal) / (term1 + term2 + term3);
-                  const impulseVec = norm.mul(j);
-                  // 3. Apply impulses
-                  a.velocity = a.velocity.add(impulseVec.mul(a.invMass));
-                  b.velocity = b.velocity.sub(impulseVec.mul(b.invMass));
-                  a.angularVelocity = a.angularVelocity.add(ra.cross(impulseVec).mul(a.invInertia));
-                  b.angularVelocity = b.angularVelocity.sub(rb.cross(impulseVec).mul(b.invInertia));
-                  this.collisionCount++;
-                }
-              } else if(a.shape.type===SHAPE_TYPE.BOX && b.shape.type===SHAPE_TYPE.BOX) {
-                if(boxCollides(a, b)) {
-                  let norm = a.position.sub(b.position).normalize();
-                  let relVel = a.velocity.sub(b.velocity).dot(norm);
-                  let impulse = (-(1+Math.min(a.restitution,b.restitution))*relVel)/ (a.invMass+b.invMass);
-                  let impulseVec = norm.mul(impulse);
-                  a.velocity = a.velocity.add(impulseVec.mul(a.invMass));
-                  b.velocity = b.velocity.sub(impulseVec.mul(b.invMass));
-                  a.position = a.position.add(norm.mul(0.05*a.invMass/(a.invMass+b.invMass)));
-                  b.position = b.position.sub(norm.mul(0.05*b.invMass/(a.invMass+b.invMass)));
-                  this.collisionCount++;
-                }
-              } else if(a.shape.type===SHAPE_TYPE.CYLINDER && b.shape.type===SHAPE_TYPE.CYLINDER) {
-                if(cylinderCollides(a, b)) {
-                  let norm = a.position.sub(b.position).normalize();
-                  let relVel = a.velocity.sub(b.velocity).dot(norm);
-                  let impulse = (-(1+Math.min(a.restitution,b.restitution))*relVel)/ (a.invMass+b.invMass);
-                  let impulseVec = norm.mul(impulse);
-                  a.velocity = a.velocity.add(impulseVec.mul(a.invMass));
-                  b.velocity = b.velocity.sub(impulseVec.mul(b.invMass));
-                  a.position = a.position.add(norm.mul(0.05*a.invMass/(a.invMass+b.invMass)));
-                  b.position = b.position.sub(norm.mul(0.05*b.invMass/(a.invMass+b.invMass)));
-                  this.collisionCount++;
-                }
-              }
+              this.resolveCollision(a, b, dt);
             }
           }
         }
       }
+      
+      resolveCollision(a, b, dt) {
+        // Determine collision type and handle accordingly
+        if (a.shape.type === SHAPE_TYPE.SPHERE && b.shape.type === SHAPE_TYPE.SPHERE) {
+          this.sphereSphereCollision(a, b);
+        } else if (a.shape.type === SHAPE_TYPE.BOX && b.shape.type === SHAPE_TYPE.BOX) {
+          this.boxBoxCollision(a, b);
+        } else if (a.shape.type === SHAPE_TYPE.CYLINDER && b.shape.type === SHAPE_TYPE.CYLINDER) {
+          this.cylinderCylinderCollision(a, b);
+        } else if (a.shape.type === SHAPE_TYPE.SPHERE && b.shape.type === SHAPE_TYPE.BOX) {
+          this.sphereBoxCollision(a, b);
+        } else if (a.shape.type === SHAPE_TYPE.BOX && b.shape.type === SHAPE_TYPE.SPHERE) {
+          this.sphereBoxCollision(b, a);
+        } else if (a.shape.type === SHAPE_TYPE.SPHERE && b.shape.type === SHAPE_TYPE.CYLINDER) {
+          this.sphereCylinderCollision(a, b);
+        } else if (a.shape.type === SHAPE_TYPE.CYLINDER && b.shape.type === SHAPE_TYPE.SPHERE) {
+          this.sphereCylinderCollision(b, a);
+        } else if (a.shape.type === SHAPE_TYPE.BOX && b.shape.type === SHAPE_TYPE.CYLINDER) {
+          this.boxCylinderCollision(a, b);
+        } else if (a.shape.type === SHAPE_TYPE.CYLINDER && b.shape.type === SHAPE_TYPE.BOX) {
+          this.boxCylinderCollision(b, a);
+        } else if (a.shape.type === SHAPE_TYPE.CUSTOM || b.shape.type === SHAPE_TYPE.CUSTOM) {
+          // For compound shapes, use bounding sphere approximation
+          this.compoundCollision(a, b);
+        }
+      }
+      
+      // Sphere-Sphere collision
+      sphereSphereCollision(a, b) {
+        const d = a.position.sub(b.position);
+        const distSqr = d.lengthSq();
+        const minDist = a.shape.radius + b.shape.radius;
+        
+        if(distSqr < minDist * minDist && distSqr > 0) {
+          const dist = Math.sqrt(distSqr);
+          const norm = d.mul(1 / dist);
+          const penetration = minDist - dist;
+          
+          // Positional correction
+          const resolveAmount = penetration * 0.8;
+          const aInvMass = a.invMass;
+          const bInvMass = b.invMass;
+          const totalInvMass = aInvMass + bInvMass;
+          
+          if (totalInvMass > 0) {
+            a.position = a.position.add(norm.mul(resolveAmount * aInvMass / totalInvMass));
+            b.position = b.position.sub(norm.mul(resolveAmount * bInvMass / totalInvMass));
+          }
+          
+          // Velocity-based collision response
+          const ra = norm.mul(-a.shape.radius);
+          const rb = norm.mul(b.shape.radius);
+          
+          // Get world space velocity at contact point
+          const va = a.velocity.add(a.angularVelocity.cross(ra));
+          const vb = b.velocity.add(b.angularVelocity.cross(rb));
+          const relVel = va.sub(vb);
+          const velAlongNormal = relVel.dot(norm);
+          
+          if (velAlongNormal > 0) return; // Moving apart
+          
+          const e = Math.min(a.restitution, b.restitution);
+          const j = (-(1 + e) * velAlongNormal) / (aInvMass + bInvMass);
+          const impulseVec = norm.mul(j);
+          
+          // Apply linear impulses
+          a.velocity = a.velocity.add(impulseVec.mul(aInvMass));
+          b.velocity = b.velocity.sub(impulseVec.mul(bInvMass));
+          
+          // Apply angular impulses
+          a.angularVelocity = a.angularVelocity.add(ra.cross(impulseVec).mul(a.invInertiaTensor.x));
+          b.angularVelocity = b.angularVelocity.sub(rb.cross(impulseVec).mul(b.invInertiaTensor.x));
+          
+          this.collisionCount++;
+        }
+      }
+      
+      // Box-Box collision using separating axis theorem
+      boxBoxCollision(a, b) {
+        // Transform positions to world space
+        const aPos = a.position;
+        const bPos = b.position;
+        const aSize = a.shape.size / 2;
+        const bSize = b.shape.size / 2;
+        
+        // Get axes to test (world axes for simplicity)
+        const axes = [
+          new Vec3(1, 0, 0),
+          new Vec3(0, 1, 0),
+          new Vec3(0, 0, 1)
+        ];
+        
+        let overlap = Number.MAX_VALUE;
+        let collisionNormal = null;
+        
+        for (const axis of axes) {
+          // Project both boxes onto axis
+          const aMin = aPos.dot(axis) - aSize * Math.abs(axis.dot(axis));
+          const aMax = aPos.dot(axis) + aSize * Math.abs(axis.dot(axis));
+          const bMin = bPos.dot(axis) - bSize * Math.abs(axis.dot(axis));
+          const bMax = bPos.dot(axis) + bSize * Math.abs(axis.dot(axis));
+          
+          // Check for separation
+          if (aMax < bMin || bMax < aMin) {
+            return; // No collision
+          }
+          
+          // Calculate overlap
+          const axisOverlap = Math.min(aMax - bMin, bMax - aMin);
+          if (axisOverlap < overlap) {
+            overlap = axisOverlap;
+            collisionNormal = axis;
+          }
+        }
+        
+        // Collision occurred
+        const dir = aPos.sub(bPos);
+        if (dir.dot(collisionNormal) < 0) {
+          collisionNormal = collisionNormal.mul(-1);
+        }
+        
+        // Positional correction
+        const resolveAmount = overlap * 0.8;
+        const aInvMass = a.invMass;
+        const bInvMass = b.invMass;
+        const totalInvMass = aInvMass + bInvMass;
+        
+        if (totalInvMass > 0) {
+          a.position = a.position.add(collisionNormal.mul(resolveAmount * aInvMass / totalInvMass));
+          b.position = b.position.sub(collisionNormal.mul(resolveAmount * bInvMass / totalInvMass));
+        }
+        
+        // Velocity-based response
+        const relVel = a.velocity.sub(b.velocity);
+        const velAlongNormal = relVel.dot(collisionNormal);
+        
+        if (velAlongNormal > 0) return;
+        
+        const e = Math.min(a.restitution, b.restitution);
+        const j = (-(1 + e) * velAlongNormal) / totalInvMass;
+        const impulseVec = collisionNormal.mul(j);
+        
+        a.velocity = a.velocity.add(impulseVec.mul(aInvMass));
+        b.velocity = b.velocity.sub(impulseVec.mul(bInvMass));
+        
+        // Apply angular impulses (simplified)
+        const ra = collisionNormal.mul(aSize);
+        const rb = collisionNormal.mul(-bSize);
+        a.angularVelocity = a.angularVelocity.add(ra.cross(impulseVec).mul(a.invInertiaTensor.x));
+        b.angularVelocity = b.angularVelocity.sub(rb.cross(impulseVec).mul(b.invInertiaTensor.x));
+        
+        this.collisionCount++;
+      }
+      
+      // Cylinder-Cylinder collision
+      cylinderCylinderCollision(a, b) {
+        const dx = a.position.x - b.position.x;
+        const dz = a.position.z - b.position.z;
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        const minDist = a.shape.radius + b.shape.radius;
+        const yOverlap = Math.abs(a.position.y - b.position.y) < (a.shape.height + b.shape.height)/2;
+        
+        if (dist < minDist && yOverlap && dist > 0) {
+          const norm = new Vec3(dx/dist, 0, dz/dist);
+          const penetration = minDist - dist;
+          
+          // Positional correction
+          const resolveAmount = penetration * 0.8;
+          const aInvMass = a.invMass;
+          const bInvMass = b.invMass;
+          const totalInvMass = aInvMass + bInvMass;
+          
+          if (totalInvMass > 0) {
+            a.position = a.position.add(norm.mul(resolveAmount * aInvMass / totalInvMass));
+            b.position = b.position.sub(norm.mul(resolveAmount * bInvMass / totalInvMass));
+          }
+          
+          // Velocity-based response
+          const relVel = a.velocity.sub(b.velocity);
+          const velAlongNormal = relVel.dot(norm);
+          
+          if (velAlongNormal > 0) return;
+          
+          const e = Math.min(a.restitution, b.restitution);
+          const j = (-(1 + e) * velAlongNormal) / totalInvMass;
+          const impulseVec = norm.mul(j);
+          
+          a.velocity = a.velocity.add(impulseVec.mul(aInvMass));
+          b.velocity = b.velocity.sub(impulseVec.mul(bInvMass));
+          
+          // Apply angular impulses
+          const ra = norm.mul(a.shape.radius);
+          const rb = norm.mul(-b.shape.radius);
+          a.angularVelocity = a.angularVelocity.add(ra.cross(impulseVec).mul(a.invInertiaTensor.x));
+          b.angularVelocity = b.angularVelocity.sub(rb.cross(impulseVec).mul(b.invInertiaTensor.x));
+          
+          this.collisionCount++;
+        }
+      }
+      
+      // Sphere-Box collision
+      sphereBoxCollision(sphere, box) {
+        const sphereToBox = box.position.sub(sphere.position);
+        const halfSize = box.shape.size / 2;
+        
+        // Find closest point on box to sphere center
+        const closest = new Vec3(
+          Math.max(box.position.x - halfSize, Math.min(sphere.position.x, box.position.x + halfSize)),
+          Math.max(box.position.y - halfSize, Math.min(sphere.position.y, box.position.y + halfSize)),
+          Math.max(box.position.z - halfSize, Math.min(sphere.position.z, box.position.z + halfSize))
+        );
+        
+        const distance = sphere.position.sub(closest);
+        const distSqr = distance.lengthSq();
+        const radiusSqr = sphere.shape.radius * sphere.shape.radius;
+        
+        if (distSqr < radiusSqr) {
+          const dist = Math.sqrt(distSqr);
+          const norm = dist > 0 ? distance.mul(1/dist) : new Vec3(0, 1, 0);
+          const penetration = sphere.shape.radius - dist;
+          
+          // Positional correction
+          const resolveAmount = penetration * 0.8;
+          const sInvMass = sphere.invMass;
+          const bInvMass = box.invMass;
+          const totalInvMass = sInvMass + bInvMass;
+          
+          if (totalInvMass > 0) {
+            sphere.position = sphere.position.sub(norm.mul(resolveAmount * sInvMass / totalInvMass));
+            box.position = box.position.add(norm.mul(resolveAmount * bInvMass / totalInvMass));
+          }
+          
+          // Velocity-based response
+          const relVel = sphere.velocity.sub(box.velocity);
+          const velAlongNormal = relVel.dot(norm);
+          
+          if (velAlongNormal > 0) return;
+          
+          const e = Math.min(sphere.restitution, box.restitution);
+          const j = (-(1 + e) * velAlongNormal) / totalInvMass;
+          const impulseVec = norm.mul(j);
+          
+          sphere.velocity = sphere.velocity.add(impulseVec.mul(sInvMass));
+          box.velocity = box.velocity.sub(impulseVec.mul(bInvMass));
+          
+          // Apply angular impulses
+          const rs = norm.mul(-sphere.shape.radius);
+          const rb = closest.sub(box.position);
+          sphere.angularVelocity = sphere.angularVelocity.add(rs.cross(impulseVec).mul(sphere.invInertiaTensor.x));
+          box.angularVelocity = box.angularVelocity.sub(rb.cross(impulseVec).mul(box.invInertiaTensor.x));
+          
+          this.collisionCount++;
+        }
+      }
+      
+      // Sphere-Cylinder collision
+      sphereCylinderCollision(sphere, cylinder) {
+        // Project sphere center onto cylinder axis
+        const dx = sphere.position.x - cylinder.position.x;
+        const dz = sphere.position.z - cylinder.position.z;
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        
+        // Check if sphere is within cylinder height
+        const dy = sphere.position.y - cylinder.position.y;
+        const halfHeight = cylinder.shape.height / 2;
+        const withinHeight = Math.abs(dy) <= halfHeight + sphere.shape.radius;
+        
+        if (withinHeight) {
+          // Side collision
+          if (dist < cylinder.shape.radius + sphere.shape.radius && dist > 0) {
+            const norm = new Vec3(dx/dist, 0, dz/dist);
+            const penetration = cylinder.shape.radius + sphere.shape.radius - dist;
+            
+            // Positional correction
+            const resolveAmount = penetration * 0.8;
+            const sInvMass = sphere.invMass;
+            const cInvMass = cylinder.invMass;
+            const totalInvMass = sInvMass + cInvMass;
+            
+            if (totalInvMass > 0) {
+              sphere.position = sphere.position.add(norm.mul(resolveAmount * sInvMass / totalInvMass));
+              cylinder.position = cylinder.position.sub(norm.mul(resolveAmount * cInvMass / totalInvMass));
+            }
+            
+            // Velocity-based response
+            const relVel = sphere.velocity.sub(cylinder.velocity);
+            const velAlongNormal = relVel.dot(norm);
+            
+            if (velAlongNormal > 0) return;
+            
+            const e = Math.min(sphere.restitution, cylinder.restitution);
+            const j = (-(1 + e) * velAlongNormal) / totalInvMass;
+            const impulseVec = norm.mul(j);
+            
+            sphere.velocity = sphere.velocity.add(impulseVec.mul(sInvMass));
+            cylinder.velocity = cylinder.velocity.sub(impulseVec.mul(cInvMass));
+            
+            // Apply angular impulses
+            const rs = norm.mul(-sphere.shape.radius);
+            const rc = norm.mul(cylinder.shape.radius);
+            sphere.angularVelocity = sphere.angularVelocity.add(rs.cross(impulseVec).mul(sphere.invInertiaTensor.x));
+            cylinder.angularVelocity = cylinder.angularVelocity.sub(rc.cross(impulseVec).mul(cylinder.invInertiaTensor.x));
+            
+            this.collisionCount++;
+            return;
+          }
+        }
+        
+        // Cap collision (top or bottom)
+        if (dist <= cylinder.shape.radius) {
+          let capY = cylinder.position.y;
+          let normalY = 0;
+          
+          if (dy > 0) {
+            capY += halfHeight;
+            normalY = 1;
+          } else {
+            capY -= halfHeight;
+            normalY = -1;
+          }
+          
+          const capDist = Math.abs(sphere.position.y - capY);
+          if (capDist < sphere.shape.radius) {
+            const norm = new Vec3(0, normalY, 0);
+            const penetration = sphere.shape.radius - capDist;
+            
+            // Positional correction
+            const resolveAmount = penetration * 0.8;
+            const sInvMass = sphere.invMass;
+            const cInvMass = cylinder.invMass;
+            const totalInvMass = sInvMass + cInvMass;
+            
+            if (totalInvMass > 0) {
+              sphere.position = sphere.position.add(norm.mul(resolveAmount * sInvMass / totalInvMass));
+              cylinder.position = cylinder.position.sub(norm.mul(resolveAmount * cInvMass / totalInvMass));
+            }
+            
+            // Velocity-based response
+            const relVel = sphere.velocity.sub(cylinder.velocity);
+            const velAlongNormal = relVel.dot(norm);
+            
+            if (velAlongNormal > 0) return;
+            
+            const e = Math.min(sphere.restitution, cylinder.restitution);
+            const j = (-(1 + e) * velAlongNormal) / totalInvMass;
+            const impulseVec = norm.mul(j);
+            
+            sphere.velocity = sphere.velocity.add(impulseVec.mul(sInvMass));
+            cylinder.velocity = cylinder.velocity.sub(impulseVec.mul(cInvMass));
+            
+            // Apply angular impulses
+            const rs = norm.mul(-sphere.shape.radius);
+            const rc = new Vec3(0, normalY * halfHeight, 0);
+            sphere.angularVelocity = sphere.angularVelocity.add(rs.cross(impulseVec).mul(sphere.invInertiaTensor.x));
+            cylinder.angularVelocity = cylinder.angularVelocity.sub(rc.cross(impulseVec).mul(cylinder.invInertiaTensor.x));
+            
+            this.collisionCount++;
+          }
+        }
+      }
+      
+      // Box-Cylinder collision
+      boxCylinderCollision(box, cylinder) {
+        // This is complex - we'll use a simplified approach
+        // Check if cylinder axis intersects box
+        const halfSize = box.shape.size / 2;
+        const halfHeight = cylinder.shape.height / 2;
+        
+        // Check if cylinder center is within box extended by cylinder radius
+        const dx = Math.max(Math.abs(cylinder.position.x - box.position.x) - halfSize, 0);
+        const dz = Math.max(Math.abs(cylinder.position.z - box.position.z) - halfSize, 0);
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        
+        if (dist < cylinder.shape.radius) {
+          // Cylinder is inside box extended by radius
+          const dy = Math.abs(cylinder.position.y - box.position.y);
+          if (dy < halfSize + halfHeight) {
+            // Collision occurred - use cylinder center as reference
+            const norm = new Vec3(
+              cylinder.position.x - box.position.x,
+              0,
+              cylinder.position.z - box.position.z
+            ).normalize();
+            
+            if (norm.length() === 0) norm.set(1, 0, 0);
+            
+            // Positional correction
+            const penetration = cylinder.shape.radius - dist;
+            const resolveAmount = penetration * 0.8;
+            const bInvMass = box.invMass;
+            const cInvMass = cylinder.invMass;
+            const totalInvMass = bInvMass + cInvMass;
+            
+            if (totalInvMass > 0) {
+              box.position = box.position.sub(norm.mul(resolveAmount * bInvMass / totalInvMass));
+              cylinder.position = cylinder.position.add(norm.mul(resolveAmount * cInvMass / totalInvMass));
+            }
+            
+            // Velocity-based response
+            const relVel = box.velocity.sub(cylinder.velocity);
+            const velAlongNormal = relVel.dot(norm);
+            
+            if (velAlongNormal > 0) return;
+            
+            const e = Math.min(box.restitution, cylinder.restitution);
+            const j = (-(1 + e) * velAlongNormal) / totalInvMass;
+            const impulseVec = norm.mul(j);
+            
+            box.velocity = box.velocity.add(impulseVec.mul(bInvMass));
+            cylinder.velocity = cylinder.velocity.sub(impulseVec.mul(cInvMass));
+            
+            // Apply angular impulses
+            const rb = norm.mul(halfSize);
+            const rc = norm.mul(cylinder.shape.radius);
+            box.angularVelocity = box.angularVelocity.add(rb.cross(impulseVec).mul(box.invInertiaTensor.x));
+            cylinder.angularVelocity = cylinder.angularVelocity.sub(rc.cross(impulseVec).mul(cylinder.invInertiaTensor.x));
+            
+            this.collisionCount++;
+          }
+        }
+      }
+      
+      // Compound shape collision (using bounding spheres)
+      compoundCollision(a, b) {
+        // Calculate bounding spheres for both objects
+        const aRadius = this.getBoundingRadius(a);
+        const bRadius = this.getBoundingRadius(b);
+        
+        const d = a.position.sub(b.position);
+        const distSqr = d.lengthSq();
+        const minDist = aRadius + bRadius;
+        
+        if(distSqr < minDist * minDist && distSqr > 0) {
+          const dist = Math.sqrt(distSqr);
+          const norm = d.mul(1 / dist);
+          const penetration = minDist - dist;
+          
+          // Positional correction
+          const resolveAmount = penetration * 0.8;
+          const aInvMass = a.invMass;
+          const bInvMass = b.invMass;
+          const totalInvMass = aInvMass + bInvMass;
+          
+          if (totalInvMass > 0) {
+            a.position = a.position.add(norm.mul(resolveAmount * aInvMass / totalInvMass));
+            b.position = b.position.sub(norm.mul(resolveAmount * bInvMass / totalInvMass));
+          }
+          
+          // Velocity-based response
+          const relVel = a.velocity.sub(b.velocity);
+          const velAlongNormal = relVel.dot(norm);
+          
+          if (velAlongNormal > 0) return;
+          
+          const e = Math.min(a.restitution, b.restitution);
+          const j = (-(1 + e) * velAlongNormal) / totalInvMass;
+          const impulseVec = norm.mul(j);
+          
+          a.velocity = a.velocity.add(impulseVec.mul(aInvMass));
+          b.velocity = b.velocity.sub(impulseVec.mul(bInvMass));
+          
+          // Apply angular impulses (simplified)
+          a.angularVelocity = a.angularVelocity.add(norm.cross(impulseVec).mul(a.invInertiaTensor.x));
+          b.angularVelocity = b.angularVelocity.sub(norm.cross(impulseVec).mul(b.invInertiaTensor.x));
+          
+          this.collisionCount++;
+        }
+      }
+      
+      getBoundingRadius(body) {
+        if (body.shape.type === SHAPE_TYPE.SPHERE) {
+          return body.shape.radius;
+        } else if (body.shape.type === SHAPE_TYPE.BOX) {
+          return (body.shape.size / 2) * Math.sqrt(3);
+        } else if (body.shape.type === SHAPE_TYPE.CYLINDER) {
+          return Math.sqrt(body.shape.radius * body.shape.radius + (body.shape.height/2) * (body.shape.height/2));
+        } else {
+          // For compound shapes, calculate max distance from center
+          let maxDist = 0;
+          for (const subShape of body.shape.shapes) {
+            let dist = 0;
+            if (subShape.shape.type === SHAPE_TYPE.SPHERE) {
+              dist = subShape.offset.length() + subShape.shape.radius;
+            } else if (subShape.shape.type === SHAPE_TYPE.BOX) {
+              dist = subShape.offset.length() + (subShape.shape.size / 2) * Math.sqrt(3);
+            } else if (subShape.shape.type === SHAPE_TYPE.CYLINDER) {
+              dist = subShape.offset.length() + Math.sqrt(
+                subShape.shape.radius * subShape.shape.radius + 
+                (subShape.shape.height/2) * (subShape.shape.height/2)
+              );
+            }
+            maxDist = Math.max(maxDist, dist);
+          }
+          return maxDist;
+        }
+      }
     }
-    function boxCollides(a, b) {
-      let sa = a.shape.size, sb = b.shape.size;
-      return Math.abs(a.position.x-b.position.x) < (sa+sb)/2 &&
-             Math.abs(a.position.y-b.position.y) < (sa+sb)/2 &&
-             Math.abs(a.position.z-b.position.z) < (sa+sb)/2;
-    }
-    function cylinderCollides(a, b) {
-      let dx = a.position.x - b.position.x;
-      let dz = a.position.z - b.position.z;
-      let dist = Math.sqrt(dx*dx + dz*dz);
-      let minDist = a.shape.radius + b.shape.radius;
-      let yOverlap = Math.abs(a.position.y-b.position.y) < (a.shape.height+b.shape.height)/2;
-      return dist < minDist && yOverlap;
-    }
+    
     // --- Rendering & UI ---
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a0f1a);
@@ -576,7 +1199,8 @@
     controls.dampingFactor = 0.05;
     controls.minDistance = 10;
     controls.maxDistance = 150;
-    // --- Enhanced ground with larger size and better visuals ---
+    
+    // Enhanced ground with larger size and better visuals
     const groundGeo = new THREE.PlaneGeometry(100, 100);
     const groundMat = new THREE.MeshStandardMaterial({ 
       color: 0x1a2b3c,
@@ -588,19 +1212,23 @@
     ground.position.y = 0;
     ground.receiveShadow = true;
     scene.add(ground);
-    // detailed grid helper for world
+    
+    // Detailed grid helper for world
     const gridHelper = new THREE.GridHelper(100, 50, 0x00bfff, 0x004466);
     gridHelper.position.y = 0.01;
     scene.add(gridHelper);
+    
     // World bounding box - much larger
     const boundsBox = new THREE.BoxHelper(new THREE.Mesh(
       new THREE.BoxGeometry(100, 100, 100)
     ), 0x00bfff);
     boundsBox.position.set(0, 50, 0);
     scene.add(boundsBox);
+    
     // Ambient lighting 
     const ambient = new THREE.AmbientLight(0xffffff, 0.3);
     scene.add(ambient);
+    
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
     dirLight.position.set(30, 50, 30);
     dirLight.castShadow = true;
@@ -613,15 +1241,19 @@
     dirLight.shadow.camera.top = 60;
     dirLight.shadow.camera.bottom = -60;
     scene.add(dirLight);
+    
     // Additional fill lights
     const fillLight1 = new THREE.DirectionalLight(0x00bfff, 0.4);
     fillLight1.position.set(-30, 30, -30);
     scene.add(fillLight1);
+    
     const fillLight2 = new THREE.DirectionalLight(0xff6b6b, 0.3);
     fillLight2.position.set(0, 40, -40);
     scene.add(fillLight2);
+    
     // Physics setup
     const world = new PhysicsWorld();
+    
     // File/model loading
     const gltfLoader = new GLTFLoader();
     const loadedModels = [];
@@ -636,6 +1268,7 @@
         });
       }
     });
+    
     // --- spawnBody ---
     function spawnBody(shapeName, position = new Vec3(0, 10, 0)) {
       let mesh, shape, mass;
@@ -690,18 +1323,21 @@
       world.addBody(rb);
       return rb;
     }
+    
     // --- UI Event Listeners ---
     let gravitySlider = document.getElementById('gravity-slider');
     gravitySlider.addEventListener('input', () => {
       world.gravity.y = Number(gravitySlider.value);
       document.getElementById('gravity-value').textContent = world.gravity.y;
     });
+    
     let timescaleSlider = document.getElementById('timescale-slider');
     let timeScale = 1;
     timescaleSlider.addEventListener('input', () => {
       timeScale = Number(timescaleSlider.value);
       document.getElementById('timescale-value').textContent = timeScale.toFixed(2);
     });
+    
     // Friction and restitution value updates
     document.getElementById('friction-slider').addEventListener('input', e => {
       const value = Number(e.target.value);
@@ -709,12 +1345,14 @@
       if(selectedBody) selectedBody.friction = value;
       updateObjectInfo();
     });
+    
     document.getElementById('restitution-slider').addEventListener('input', e => {
       const value = Number(e.target.value);
       document.getElementById('restitution-value').textContent = value.toFixed(2);
       if(selectedBody) selectedBody.restitution = value;
       updateObjectInfo();
     });
+    
     // World size slider
     let worldSizeSlider = document.getElementById('worldsize-slider');
     worldSizeSlider.addEventListener('input', () => {
@@ -722,6 +1360,7 @@
       world.setWorldSize(size);
       document.getElementById('worldsize-value').textContent = size;
     });
+    
     // Orbit mode toggle
     let orbitMode = false;
     document.getElementById('orbit-mode-btn').addEventListener('click', () => {
@@ -734,12 +1373,14 @@
         document.getElementById('orbit-mode-btn').textContent = '🌌 Toggle Orbit Mode';
       }
     });
+    
     // Sun gravity slider
     let sunGravitySlider = document.getElementById('sun-gravity-slider');
     sunGravitySlider.addEventListener('input', () => {
       world.sunGravity = Number(sunGravitySlider.value);
       document.getElementById('sun-gravity-value').textContent = world.sunGravity;
     });
+    
     // Add sun button
     document.getElementById('add-sun-btn').addEventListener('click', () => {
       // Remove existing sun if any
@@ -768,10 +1409,12 @@
       dirLight.position.set(0, 0, 0);
       dirLight.intensity = 2.0;
     });
+    
     document.getElementById('shoot-btn').addEventListener('click', () => {
       let newBody = spawnBody(document.getElementById('spawn-shape').value, new Vec3(0, 10, 0));
       if(newBody) newBody.velocity = new Vec3(0, 0, -20);
     });
+    
     document.getElementById('spawn-random-btn').addEventListener('click', () => {
       const shapes = ['Sphere', 'Box', 'Cylinder'];
       const randomShape = shapes[Math.floor(Math.random() * shapes.length)];
@@ -782,6 +1425,7 @@
       const y = orbitMode ? (Math.random() - 0.5) * (halfSize * 1.6) : (15 + Math.random() * 20);
       spawnBody(randomShape, new Vec3(x, y, z));
     });
+    
     document.getElementById('reset-btn').addEventListener('click', () => {
       world.bodies.forEach(b => scene.remove(b.mesh));
       world.bodies = [];
@@ -791,38 +1435,45 @@
       dirLight.position.set(30, 50, 30);
       dirLight.intensity = 1.0;
     });
+    
     let paused = false;
     document.getElementById('pause-btn').onclick = () => {
       paused = true;
       document.getElementById('pause-btn').style.display='none';
       document.getElementById('resume-btn').style.display='inline-block';
     };
+    
     document.getElementById('resume-btn').onclick = () => {
       paused = false;
       document.getElementById('pause-btn').style.display='inline-block';
       document.getElementById('resume-btn').style.display='none';
     };
+    
     document.getElementById('cam-front-btn').onclick = () => { 
       camera.position.set(0, 25, 50); 
       controls.target.set(0, 0, 0); 
       controls.update();
     };
+    
     document.getElementById('cam-top-btn').onclick = () => { 
       camera.position.set(0, 80, 0.1); 
       controls.target.set(0, 0, 0); 
       controls.update();
     };
+    
     document.getElementById('cam-side-btn').onclick = () => { 
       camera.position.set(50, 25, 0); 
       controls.target.set(0, 0, 0); 
       controls.update();
     };
+    
     document.getElementById('cam-orbit-btn').onclick = () => { 
       camera.position.set(0, 25, 50); 
       controls.target.set(0, 0, 0); 
       controls.enable = true;
       controls.update();
     };
+    
     document.getElementById('reset-object-btn').onclick = () => {
       if(selectedBody) {
         selectedBody.position = new Vec3(0, 10, 0);
@@ -833,6 +1484,7 @@
         updateObjectInfo();
       }
     };
+    
     // --- Save/Load Scene ---
     document.getElementById('save-btn').addEventListener('click', () => {
       let data = world.bodies.map(b => ({
@@ -846,7 +1498,8 @@
         size: b.shape.size || b.shape.radius, 
         height: b.shape.height, 
         color: b.mesh.material.color.getHex(),
-        isSun: b.isSun
+        isSun: b.isSun,
+        orientation: [b.orientation.x, b.orientation.y, b.orientation.z, b.orientation.w]
       }));
       let blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
       let a = document.createElement('a');
@@ -854,6 +1507,7 @@
       a.download = 'approx-sandbox-scene.json'; 
       a.click();
     });
+    
     document.getElementById('import-btn').onclick = () => document.getElementById('import-scene-input').click();
     document.getElementById('import-scene-input').addEventListener('change', e => {
       if(e.target.files.length === 0) return;
@@ -925,6 +1579,14 @@
               rb.friction = item.friction;
               rb.restitution = item.restitution;
               rb.isSun = item.isSun || false;
+              if (item.orientation) {
+                rb.orientation = new Quaternion(
+                  item.orientation[0],
+                  item.orientation[1],
+                  item.orientation[2],
+                  item.orientation[3]
+                );
+              }
               if (rb.isSun) {
                 rb.invMass = 0;
                 dirLight.position.set(item.position[0], item.position[1], item.position[2]);
@@ -941,6 +1603,7 @@
       };
       reader.readAsText(file);
     });
+    
     // --- User Interaction Logic ---
     let selectedBody = null;
     let draggingBody = null;
@@ -949,6 +1612,7 @@
     let lastPaintPoint = new THREE.Vector3();
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
+    
     // Invisible plane for painting on (larger to match world)
     const paintPlane = new THREE.Mesh(
       new THREE.PlaneGeometry(200, 200),
@@ -956,6 +1620,7 @@
     );
     paintPlane.rotation.x = -Math.PI / 2;
     scene.add(paintPlane);
+    
     document.getElementById('paint-btn').addEventListener('click', () => {
         paintMode = !paintMode;
         document.getElementById('paint-btn').classList.toggle('active', paintMode);
@@ -966,11 +1631,13 @@
           document.getElementById('paint-btn').textContent = '🎨 Paint Mode';
         }
     });
+    
     function getMouseIntersection() {
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObject(paintPlane);
       return intersects.length > 0 ? intersects[0].point : null;
     }
+    
     renderer.domElement.addEventListener('pointerdown', e => {
       mouse.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
       if (paintMode) {
@@ -987,7 +1654,7 @@
         const intersects = raycaster.intersectObjects(scene.children, true);
         if(selectedBody?.mesh) {
           selectedBody.mesh.material.emissive?.setHex(0x000000);
-          selectedBody.mesh.material.color.setHex(selectedBody.originalColor || 0xffffff);
+          selectedBody.mesh.material.color.setHex(selectedBody.originalColor);
         }
         selectedBody = null;
         if(intersects.length) {
@@ -1003,6 +1670,7 @@
         updateObjectInfo();
       }
     });
+    
     renderer.domElement.addEventListener('pointermove', e => {
       mouse.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
       if (paintMode && isPainting) {
@@ -1021,6 +1689,7 @@
         }
       }
     });
+    
     renderer.domElement.addEventListener('pointerup', e => {
       isPainting = false;
       draggingBody = null;
@@ -1028,6 +1697,7 @@
         controls.enabled = true;
       }
     });
+    
     function updateObjectInfo() {
       const infoDiv = document.getElementById('object-info');
       if(selectedBody) {
@@ -1038,13 +1708,16 @@
           Mass: ${selectedBody.mass.toFixed(2)}<br>
           Position: (${selectedBody.position.x.toFixed(2)}, ${selectedBody.position.y.toFixed(2)}, ${selectedBody.position.z.toFixed(2)})<br>
           Velocity: ${selectedBody.velocity.length().toFixed(2)}<br>
+          Angular Velocity: ${selectedBody.angularVelocity.length().toFixed(2)}<br>
           Restitution: ${selectedBody.restitution.toFixed(2)}<br>
+          Friction: ${selectedBody.friction.toFixed(2)}<br>
           ${selectedBody.isSun ? '☀️ This is the Sun' : ''}
         `;
       } else {
         infoDiv.innerHTML = '';
       }
     }
+    
     // --- Simulation Loop & Stats ---
     let lastTime = performance.now(), frameCount = 0, lastStatsTime = performance.now();
     function animate() {
@@ -1075,6 +1748,7 @@
       }
       if(selectedBody) updateObjectInfo();
     }
+    
     // --- UI Sidebar/Overlay ---
     document.getElementById('start-button').onclick = () => {
       document.getElementById('loading-overlay').style.display='none';
@@ -1083,12 +1757,15 @@
       if (window.innerWidth > 768) document.body.classList.add('sidebar-visible');
       animate();
     };
+    
     document.getElementById('toggle-sidebar').onclick = () => document.body.classList.toggle('sidebar-visible');
+    
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
+    
     // Initialize slider value displays
     document.getElementById('gravity-value').textContent = gravitySlider.value;
     document.getElementById('timescale-value').textContent = timescaleSlider.value;
