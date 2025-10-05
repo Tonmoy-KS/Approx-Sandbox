@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Approx Sandbox - 3D Physics Engine — V.1.5.0</title>
+  <title>Approx Sandbox - 3D Physics Engine — V.1.6.0</title>
   <style>
     body { margin: 0; overflow: hidden; background: #0a0f1a; font-family: 'Segoe UI', system-ui, sans-serif; }
     canvas { display: block; }
@@ -148,14 +148,12 @@
       outline-offset: 2px;
       box-shadow: 0 0 20px rgba(0, 255, 64, 0.5);
     }
-
     body.sidebar-visible #sidebar {
       transform: translateX(0);
     }
     body.sidebar-visible #toggle-sidebar {
       left: 360px;
     }
-
     @media (max-width: 768px) {
       #sidebar {
         width: 300px;
@@ -171,7 +169,6 @@
         font-size: 2.0em;
       }
     }
-
     /* Slider styling */
     input[type="range"] {
       -webkit-appearance: none;
@@ -203,7 +200,6 @@
       box-shadow: 0 0 12px rgba(0, 191, 255, 0.8);
       border: 2px solid #0a1929;
     }
-
     /* Object info styling */
     #object-info {
       background: rgba(0, 0, 0, 0.4);
@@ -220,7 +216,6 @@
       margin-bottom: 8px;
       font-size: 1.1em;
     }
-
     /* World size indicator */
     #world-size {
       margin-top: 12px;
@@ -241,7 +236,7 @@
   <div id="loading-overlay">
     <div id="loading-box">
       <h2>Approx Sandbox</h2>
-      <p>3D Physics Engine<br>
+      <p>3D Physics Engine V.1.6.0<br>
          Drag & Drop GLB/GLTF models, or click Start to begin.</p>
       <input type="file" id="model-input" accept=".glb,.gltf" multiple>
       <ul id="file-list" class="file-list"></ul>
@@ -266,29 +261,31 @@
     <span id="friction-value" style="display:block; text-align:right; color:#00bfff; margin-top:-18px; margin-bottom:10px; font-weight:600;">0.30</span>
     <label>Restitution: <input type="range" id="restitution-slider" min="0" max="1" step="0.01" value="0.4"></label>
     <span id="restitution-value" style="display:block; text-align:right; color:#00bfff; margin-top:-18px; margin-bottom:14px; font-weight:600;">0.40</span>
-    
+    <label>World Size: <input type="range" id="worldsize-slider" min="50" max="500" value="100"></label>
+    <span id="worldsize-value" style="display:block; text-align:right; color:#00bfff; margin-top:-18px; margin-bottom:14px; font-weight:600;">100</span>
     <h2>Interaction</h2>
     <button id="paint-btn">🎨 Paint Mode</button>
     <button id="shoot-btn">🧱 Place Object</button>
     <button id="spawn-random-btn">🎲 Spawn Random Object</button>
-    
+    <h2>Orbit Mode</h2>
+    <button id="orbit-mode-btn">🌌 Toggle Orbit Mode</button>
+    <button id="add-sun-btn">☀️ Add Light Orb (Sun)</button>
+    <label>Sun Gravity: <input type="range" id="sun-gravity-slider" min="0" max="200" value="50"></label>
+    <span id="sun-gravity-value" style="display:block; text-align:right; color:#00bfff; margin-top:-18px; margin-bottom:14px; font-weight:600;">50</span>
     <h2>World Management</h2>
     <button id="reset-btn">↩️ Reset World</button>
     <button id="pause-btn">⏸️ Pause</button>
     <button id="resume-btn" style="display:none;">▶️ Resume</button>
-    
     <h2>Camera Presets</h2>
     <button id="cam-front-btn" style="margin-right:8px;">Front</button>
     <button id="cam-top-btn" style="margin-right:8px;">Top</button>
     <button id="cam-side-btn">Side</button>
     <button id="cam-orbit-btn">Orbit</button>
-    
     <h2>Scene Management</h2>
     <button id="reset-object-btn">🔄 Reset Selected</button>
     <button id="save-btn">💾 Save Scene</button>
     <button id="load-btn">📂 Load Scene</button>
     <button id="import-btn">📥 Import Scene</button>
-    
     <input type="file" id="import-scene-input" accept="application/json" style="display:none;">
     <div id="stats"></div>
     <div id="object-info"></div>
@@ -297,7 +294,6 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-
     // --- Vector/Quaternion/Shape ---
     class Vec3 {
       constructor(x=0, y=0, z=0) { this.x=x; this.y=y; this.z=z;}
@@ -305,17 +301,16 @@
       sub(v) { return new Vec3(this.x-v.x, this.y-v.y, this.z-v.z);}
       mul(s) { return new Vec3(this.x*s, this.y*s, this.z*s);}
       dot(v) { return this.x*v.x + this.y*v.y + this.z*v.z;}
+      cross(v) { return new Vec3(this.y*v.z - this.z*v.y, this.z*v.x - this.x*v.z, this.x*v.y - this.y*v.x); }
       length() { return Math.sqrt(this.x*this.x+this.y*this.y+this.z*this.z);}
       normalize() { const l=this.length(); return l===0?new Vec3():this.mul(1/l);}
       copy() { return new Vec3(this.x,this.y,this.z);}
       set(x, y, z) {this.x=x;this.y=y;this.z=z;}
       static zero() { return new Vec3(0,0,0);}
     }
-
     class Quaternion { // Minimal placeholder for orientation
       constructor(x=0,y=0,z=0,w=1){this.x=x;this.y=y;this.z=z;this.w=w;}
     }
-
     const SHAPE_TYPE = { SPHERE:0, BOX:1, CYLINDER:2, CUSTOM:3 };
     class SphereShape { constructor(radius) { this.type=SHAPE_TYPE.SPHERE; this.radius=radius; } }
     class BoxShape { constructor(size) { this.type=SHAPE_TYPE.BOX; this.size=size; } }
@@ -332,7 +327,6 @@
         this.shapes = shapes; // array of {shape, offset}
       }
     }
-
     // --- Rigid Body ---
     class RigidBody {
       constructor(position, shape, mass, mesh) {
@@ -348,14 +342,23 @@
         this.angularVelocity = Vec3.zero();
         this.orientation = new Quaternion();
         this.torque = Vec3.zero();
-        // Inertia (demo-only for sphere/cylinder)
-        if(shape.type === SHAPE_TYPE.SPHERE)
-          this.inertia = (2/5)*mass*Math.pow(shape.radius,2);
-        else if(shape.type === SHAPE_TYPE.CYLINDER)
-          this.inertia = (1/2)*mass*Math.pow(shape.radius,2);
-        else
-          this.inertia = 1;
-        this.invInertia = this.inertia > 0 ? 1/this.inertia : 0;
+        this.isSun = false;
+        if (mass > 0) {
+            if (shape.type === SHAPE_TYPE.SPHERE) {
+                const i = (2/5) * mass * shape.radius * shape.radius;
+                this.invInertia = 1 / i;
+            } else if (shape.type === SHAPE_TYPE.BOX) {
+                const i = (1/12) * mass * (shape.size*shape.size + shape.size*shape.size);
+                this.invInertia = 1 / i;
+            } else if (shape.type === SHAPE_TYPE.CYLINDER) {
+                const i = (1/2) * mass * shape.radius * shape.radius;
+                this.invInertia = 1/i;
+            } else {
+                this.invInertia = 1; // Default fallback
+            }
+        } else {
+            this.invInertia = 0;
+        }
       }
       applyForce(f) { this.force = this.force.add(f); }
       applyTorque(t) { this.torque = this.torque.add(t); }
@@ -365,20 +368,20 @@
         this.velocity = this.velocity.add(this.force.mul(dt*this.invMass));
         this.position = this.position.add(this.velocity.mul(dt));
         // angular
-        this.angularVelocity = this.angularVelocity.add(this.torque.mul(dt*this.invInertia));
-        this.torque = Vec3.zero();
+        this.angularVelocity = this.angularVelocity.add(this.torque.mul(dt * this.invInertia));
         if(this.mesh) {
           this.mesh.position.set(this.position.x, this.position.y, this.position.z);
           if(this.angularVelocity.length() > 0.0001) {
+            // NOTE: Proper rotation requires quaternion integration. This is a visual approximation.
             this.mesh.rotateX(this.angularVelocity.x * dt);
             this.mesh.rotateY(this.angularVelocity.y * dt);
             this.mesh.rotateZ(this.angularVelocity.z * dt);
           }
         }
         this.force = Vec3.zero();
+        this.torque = Vec3.zero();
       }
     }
-
     // --- Physics World ---
     class PhysicsWorld {
       constructor() {
@@ -386,9 +389,19 @@
         this.gravity = new Vec3(0, -15, 0);
         this.bounds = {x:100, y:100, z:100};
         this.collisionCount = 0;
+        this.orbitMode = false;
+        this.sunGravity = 50;
       }
       addBody(b) { this.bodies.push(b);}
       removeBody(b) { const i=this.bodies.indexOf(b); if(i>-1) this.bodies.splice(i,1);}
+      setWorldSize(size) {
+        this.bounds = {x:size, y:size, z:size};
+        ground.geometry = new THREE.PlaneGeometry(size, size);
+        gridHelper.geometry = new THREE.PlaneGeometry(size, size);
+        gridHelper.position.set(0, 0.01, 0);
+        boundsBox.geometry = new THREE.BoxGeometry(size, size, size);
+        boundsBox.position.set(0, size/2, 0);
+      }
       update(dt) {
         this.collisionCount = 0;
         // Broadphase spatial hash with larger grid
@@ -398,17 +411,36 @@
           if(!grid[key]) grid[key]=[];
           grid[key].push(b);
         }
+
+        // Apply forces
         for(const b of this.bodies) {
-          b.applyForce(this.gravity.mul(b.mass));
+          if (this.orbitMode && !b.isSun) {
+            // Apply sun gravity if sun exists
+            let sun = this.bodies.find(body => body.isSun);
+            if (sun) {
+              let dir = sun.position.sub(b.position);
+              let dist = dir.length();
+              if (dist > 0.1) {
+                let forceMag = this.sunGravity * b.mass / (dist * dist);
+                let force = dir.normalize().mul(forceMag);
+                b.applyForce(force);
+              }
+            }
+          } else {
+            b.applyForce(this.gravity.mul(b.mass));
+          }
           b.integrate(dt);
         }
 
+        // Boundary handling
         for(const b of this.bodies) {
-            let halfSize = 0;
-            if (b.shape.type === SHAPE_TYPE.SPHERE) halfSize = b.shape.radius;
-            else if (b.shape.type === SHAPE_TYPE.BOX) halfSize = b.shape.size / 2;
-            else if (b.shape.type === SHAPE_TYPE.CYLINDER) halfSize = b.shape.height / 2;
-            
+          if (b.isSun) continue;
+          let halfSize = 0;
+          if (b.shape.type === SHAPE_TYPE.SPHERE) halfSize = b.shape.radius;
+          else if (b.shape.type === SHAPE_TYPE.BOX) halfSize = b.shape.size / 2;
+          else if (b.shape.type === SHAPE_TYPE.CYLINDER) halfSize = b.shape.height / 2;
+
+          if (!this.orbitMode) {
             // Ground collision (y = 0)
             if(b.position.y < halfSize) {
               b.position.y = halfSize;
@@ -416,7 +448,6 @@
               b.velocity.x *= (1 - b.friction);
               b.velocity.z *= (1 - b.friction);
             }
-
             // Wall/Ceiling collisions
             for(const axis of ['x','z']) {
                 if(b.position[axis] < -this.bounds[axis]/2 + halfSize) {
@@ -433,6 +464,17 @@
               b.position.y = this.bounds.y - halfSize;
               b.velocity.y = -b.velocity.y*b.restitution;
             }
+          } else {
+            // In orbit mode, wrap around world bounds
+            for(const axis of ['x','y','z']) {
+              if(b.position[axis] < -this.bounds[axis]/2) {
+                b.position[axis] += this.bounds[axis];
+              }
+              if(b.position[axis] > this.bounds[axis]/2) {
+                b.position[axis] -= this.bounds[axis];
+              }
+            }
+          }
         }
 
         // Object collisions (only within same grid cell)
@@ -443,28 +485,43 @@
             for(let j=i+1;j<cellBodies.length;j++) {
               let b=cellBodies[j];
               if(a.shape.type===SHAPE_TYPE.SPHERE && b.shape.type===SHAPE_TYPE.SPHERE) {
-                let d = a.position.sub(b.position);
-                let dist = d.length();
-                let minDist = a.shape.radius + b.shape.radius;
-                if(dist < minDist && dist>0) {
-                  let norm = d.normalize();
-                  let penetration = minDist-dist;
-                  let relVel = a.velocity.sub(b.velocity).dot(norm);
-                  let impulse = (-(1+Math.min(a.restitution,b.restitution))*relVel)/
-                                (a.invMass+b.invMass);
-                  let impulseVec = norm.mul(impulse);
+                const d = a.position.sub(b.position);
+                const distSqr = d.dot(d);
+                const minDist = a.shape.radius + b.shape.radius;
+                if(distSqr < minDist * minDist && distSqr > 0) {
+                  const dist = Math.sqrt(distSqr);
+                  const norm = d.mul(1 / dist);
+                  const penetration = minDist - dist;
+                  // 1. Resolve penetration
+                  const resolveAmount = penetration * 0.8; // Positional correction factor
+                  a.position = a.position.add(norm.mul(resolveAmount * a.invMass / (a.invMass + b.invMass)));
+                  b.position = b.position.sub(norm.mul(resolveAmount * b.invMass / (a.invMass + b.invMass)));
+                  // 2. Calculate impulse
+                  const ra = norm.mul(-a.shape.radius); // Vector from center to contact point
+                  const rb = norm.mul(b.shape.radius);
+                  const va = a.velocity.add(a.angularVelocity.cross(ra));
+                  const vb = b.velocity.add(b.angularVelocity.cross(rb));
+                  const relVel = va.sub(vb);
+                  const velAlongNormal = relVel.dot(norm);
+                  if (velAlongNormal > 0) continue; // They are already moving apart
+                  const e = Math.min(a.restitution, b.restitution);
+                  const term1 = a.invMass + b.invMass;
+                  const term2 = ra.cross(norm).cross(ra).mul(a.invInertia).dot(norm);
+                  const term3 = rb.cross(norm).cross(rb).mul(b.invInertia).dot(norm);
+                  const j = (-(1 + e) * velAlongNormal) / (term1 + term2 + term3);
+                  const impulseVec = norm.mul(j);
+                  // 3. Apply impulses
                   a.velocity = a.velocity.add(impulseVec.mul(a.invMass));
                   b.velocity = b.velocity.sub(impulseVec.mul(b.invMass));
-                  a.position = a.position.add(norm.mul(penetration*a.invMass/(a.invMass+b.invMass)));
-                  b.position = b.position.sub(norm.mul(penetration*b.invMass/(a.invMass+b.invMass)));
+                  a.angularVelocity = a.angularVelocity.add(ra.cross(impulseVec).mul(a.invInertia));
+                  b.angularVelocity = b.angularVelocity.sub(rb.cross(impulseVec).mul(b.invInertia));
                   this.collisionCount++;
                 }
               } else if(a.shape.type===SHAPE_TYPE.BOX && b.shape.type===SHAPE_TYPE.BOX) {
                 if(boxCollides(a, b)) {
                   let norm = a.position.sub(b.position).normalize();
                   let relVel = a.velocity.sub(b.velocity).dot(norm);
-                  let impulse = (-(1+Math.min(a.restitution,b.restitution))*relVel)/
-                                (a.invMass+b.invMass);
+                  let impulse = (-(1+Math.min(a.restitution,b.restitution))*relVel)/ (a.invMass+b.invMass);
                   let impulseVec = norm.mul(impulse);
                   a.velocity = a.velocity.add(impulseVec.mul(a.invMass));
                   b.velocity = b.velocity.sub(impulseVec.mul(b.invMass));
@@ -476,8 +533,7 @@
                 if(cylinderCollides(a, b)) {
                   let norm = a.position.sub(b.position).normalize();
                   let relVel = a.velocity.sub(b.velocity).dot(norm);
-                  let impulse = (-(1+Math.min(a.restitution,b.restitution))*relVel)/
-                                (a.invMass+b.invMass);
+                  let impulse = (-(1+Math.min(a.restitution,b.restitution))*relVel)/ (a.invMass+b.invMass);
                   let impulseVec = norm.mul(impulse);
                   a.velocity = a.velocity.add(impulseVec.mul(a.invMass));
                   b.velocity = b.velocity.sub(impulseVec.mul(b.invMass));
@@ -491,7 +547,6 @@
         }
       }
     }
-
     function boxCollides(a, b) {
       let sa = a.shape.size, sb = b.shape.size;
       return Math.abs(a.position.x-b.position.x) < (sa+sb)/2 &&
@@ -506,13 +561,11 @@
       let yOverlap = Math.abs(a.position.y-b.position.y) < (a.shape.height+b.shape.height)/2;
       return dist < minDist && yOverlap;
     }
-
     // --- Rendering & UI ---
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a0f1a);
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 200);
     camera.position.set(0, 25, 50);
-
     const renderer = new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
@@ -523,7 +576,6 @@
     controls.dampingFactor = 0.05;
     controls.minDistance = 10;
     controls.maxDistance = 150;
-
     // --- Enhanced ground with larger size and better visuals ---
     const groundGeo = new THREE.PlaneGeometry(100, 100);
     const groundMat = new THREE.MeshStandardMaterial({ 
@@ -536,23 +588,19 @@
     ground.position.y = 0;
     ground.receiveShadow = true;
     scene.add(ground);
-
     // detailed grid helper for world
     const gridHelper = new THREE.GridHelper(100, 50, 0x00bfff, 0x004466);
     gridHelper.position.y = 0.01;
     scene.add(gridHelper);
-
     // World bounding box - much larger
     const boundsBox = new THREE.BoxHelper(new THREE.Mesh(
       new THREE.BoxGeometry(100, 100, 100)
     ), 0x00bfff);
     boundsBox.position.set(0, 50, 0);
     scene.add(boundsBox);
-
     // Ambient lighting 
     const ambient = new THREE.AmbientLight(0xffffff, 0.3);
     scene.add(ambient);
-    
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
     dirLight.position.set(30, 50, 30);
     dirLight.castShadow = true;
@@ -565,19 +613,15 @@
     dirLight.shadow.camera.top = 60;
     dirLight.shadow.camera.bottom = -60;
     scene.add(dirLight);
-
     // Additional fill lights
     const fillLight1 = new THREE.DirectionalLight(0x00bfff, 0.4);
     fillLight1.position.set(-30, 30, -30);
     scene.add(fillLight1);
-
     const fillLight2 = new THREE.DirectionalLight(0xff6b6b, 0.3);
     fillLight2.position.set(0, 40, -40);
     scene.add(fillLight2);
-
     // Physics setup
     const world = new PhysicsWorld();
-
     // File/model loading
     const gltfLoader = new GLTFLoader();
     const loadedModels = [];
@@ -592,7 +636,6 @@
         });
       }
     });
-
     // --- spawnBody ---
     function spawnBody(shapeName, position = new Vec3(0, 10, 0)) {
       let mesh, shape, mass;
@@ -647,21 +690,18 @@
       world.addBody(rb);
       return rb;
     }
-
     // --- UI Event Listeners ---
     let gravitySlider = document.getElementById('gravity-slider');
     gravitySlider.addEventListener('input', () => {
       world.gravity.y = Number(gravitySlider.value);
       document.getElementById('gravity-value').textContent = world.gravity.y;
     });
-    
     let timescaleSlider = document.getElementById('timescale-slider');
     let timeScale = 1;
     timescaleSlider.addEventListener('input', () => {
       timeScale = Number(timescaleSlider.value);
       document.getElementById('timescale-value').textContent = timeScale.toFixed(2);
     });
-
     // Friction and restitution value updates
     document.getElementById('friction-slider').addEventListener('input', e => {
       const value = Number(e.target.value);
@@ -669,36 +709,88 @@
       if(selectedBody) selectedBody.friction = value;
       updateObjectInfo();
     });
-    
     document.getElementById('restitution-slider').addEventListener('input', e => {
       const value = Number(e.target.value);
       document.getElementById('restitution-value').textContent = value.toFixed(2);
       if(selectedBody) selectedBody.restitution = value;
       updateObjectInfo();
     });
-
+    // World size slider
+    let worldSizeSlider = document.getElementById('worldsize-slider');
+    worldSizeSlider.addEventListener('input', () => {
+      let size = Number(worldSizeSlider.value);
+      world.setWorldSize(size);
+      document.getElementById('worldsize-value').textContent = size;
+    });
+    // Orbit mode toggle
+    let orbitMode = false;
+    document.getElementById('orbit-mode-btn').addEventListener('click', () => {
+      orbitMode = !orbitMode;
+      world.orbitMode = orbitMode;
+      document.getElementById('orbit-mode-btn').classList.toggle('active', orbitMode);
+      if(orbitMode) {
+        document.getElementById('orbit-mode-btn').textContent = '🌌 Orbit Mode ON';
+      } else {
+        document.getElementById('orbit-mode-btn').textContent = '🌌 Toggle Orbit Mode';
+      }
+    });
+    // Sun gravity slider
+    let sunGravitySlider = document.getElementById('sun-gravity-slider');
+    sunGravitySlider.addEventListener('input', () => {
+      world.sunGravity = Number(sunGravitySlider.value);
+      document.getElementById('sun-gravity-value').textContent = world.sunGravity;
+    });
+    // Add sun button
+    document.getElementById('add-sun-btn').addEventListener('click', () => {
+      // Remove existing sun if any
+      let existingSun = world.bodies.find(b => b.isSun);
+      if (existingSun) {
+        scene.remove(existingSun.mesh);
+        world.removeBody(existingSun);
+      }
+      // Create sun
+      const sunRadius = 3;
+      const sunMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(sunRadius, 64, 64),
+        new THREE.MeshBasicMaterial({
+          color: 0xffaa00,
+          emissive: 0xff7700,
+          emissiveIntensity: 2
+        })
+      );
+      sunMesh.position.set(0, 0, 0);
+      scene.add(sunMesh);
+      const sunBody = new RigidBody(new Vec3(0,0,0), new SphereShape(sunRadius), 1000000, sunMesh);
+      sunBody.isSun = true;
+      sunBody.invMass = 0; // Immovable
+      world.addBody(sunBody);
+      // Update lighting to use sun as main light
+      dirLight.position.set(0, 0, 0);
+      dirLight.intensity = 2.0;
+    });
     document.getElementById('shoot-btn').addEventListener('click', () => {
       let newBody = spawnBody(document.getElementById('spawn-shape').value, new Vec3(0, 10, 0));
       if(newBody) newBody.velocity = new Vec3(0, 0, -20);
     });
-
     document.getElementById('spawn-random-btn').addEventListener('click', () => {
       const shapes = ['Sphere', 'Box', 'Cylinder'];
       const randomShape = shapes[Math.floor(Math.random() * shapes.length)];
       // Spawn in random position within the world bounds
-      const x = (Math.random() - 0.5) * 80;
-      const z = (Math.random() - 0.5) * 80;
-      const y = 15 + Math.random() * 20;
+      const halfSize = world.bounds.x / 2;
+      const x = (Math.random() - 0.5) * (halfSize * 1.6);
+      const z = (Math.random() - 0.5) * (halfSize * 1.6);
+      const y = orbitMode ? (Math.random() - 0.5) * (halfSize * 1.6) : (15 + Math.random() * 20);
       spawnBody(randomShape, new Vec3(x, y, z));
     });
-
     document.getElementById('reset-btn').addEventListener('click', () => {
       world.bodies.forEach(b => scene.remove(b.mesh));
       world.bodies = [];
       selectedBody = null;
       updateObjectInfo();
+      // Reset lighting
+      dirLight.position.set(30, 50, 30);
+      dirLight.intensity = 1.0;
     });
-
     let paused = false;
     document.getElementById('pause-btn').onclick = () => {
       paused = true;
@@ -710,7 +802,6 @@
       document.getElementById('pause-btn').style.display='inline-block';
       document.getElementById('resume-btn').style.display='none';
     };
-
     document.getElementById('cam-front-btn').onclick = () => { 
       camera.position.set(0, 25, 50); 
       controls.target.set(0, 0, 0); 
@@ -732,7 +823,6 @@
       controls.enable = true;
       controls.update();
     };
-
     document.getElementById('reset-object-btn').onclick = () => {
       if(selectedBody) {
         selectedBody.position = new Vec3(0, 10, 0);
@@ -743,7 +833,6 @@
         updateObjectInfo();
       }
     };
-    
     // --- Save/Load Scene ---
     document.getElementById('save-btn').addEventListener('click', () => {
       let data = world.bodies.map(b => ({
@@ -756,7 +845,8 @@
         restitution: b.restitution,
         size: b.shape.size || b.shape.radius, 
         height: b.shape.height, 
-        color: b.mesh.material.color.getHex()
+        color: b.mesh.material.color.getHex(),
+        isSun: b.isSun
       }));
       let blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
       let a = document.createElement('a');
@@ -764,7 +854,6 @@
       a.download = 'approx-sandbox-scene.json'; 
       a.click();
     });
-
     document.getElementById('import-btn').onclick = () => document.getElementById('import-scene-input').click();
     document.getElementById('import-scene-input').addEventListener('change', e => {
       if(e.target.files.length === 0) return;
@@ -776,19 +865,29 @@
           world.bodies.forEach(b => scene.remove(b.mesh));
           world.bodies = [];
           selectedBody = null;
-          
           data.forEach(item => {
             let mesh, shape;
             if(item.type === SHAPE_TYPE.SPHERE) {
               shape = new SphereShape(item.size);
-              mesh = new THREE.Mesh(
-                new THREE.SphereGeometry(item.size, 48, 32),
-                new THREE.MeshStandardMaterial({
-                  color: item.color,
-                  roughness: 0.2,
-                  metalness: 0.8
-                })
-              );
+              if (item.isSun) {
+                mesh = new THREE.Mesh(
+                  new THREE.SphereGeometry(item.size, 64, 64),
+                  new THREE.MeshBasicMaterial({
+                    color: 0xffaa00,
+                    emissive: 0xff7700,
+                    emissiveIntensity: 2
+                  })
+                );
+              } else {
+                mesh = new THREE.Mesh(
+                  new THREE.SphereGeometry(item.size, 48, 32),
+                  new THREE.MeshStandardMaterial({
+                    color: item.color,
+                    roughness: 0.2,
+                    metalness: 0.8
+                  })
+                );
+              }
             } else if(item.type === SHAPE_TYPE.BOX) {
               shape = new BoxShape(item.size);
               mesh = new THREE.Mesh(
@@ -810,7 +909,6 @@
                 })
               );
             }
-            
             if(mesh) {
               mesh.position.set(item.position[0], item.position[1], item.position[2]);
               mesh.castShadow = true;
@@ -826,6 +924,12 @@
               rb.angularVelocity = new Vec3(item.angularVelocity[0], item.angularVelocity[1], item.angularVelocity[2]);
               rb.friction = item.friction;
               rb.restitution = item.restitution;
+              rb.isSun = item.isSun || false;
+              if (rb.isSun) {
+                rb.invMass = 0;
+                dirLight.position.set(item.position[0], item.position[1], item.position[2]);
+                dirLight.intensity = 2.0;
+              }
               world.addBody(rb);
             }
           });
@@ -837,7 +941,6 @@
       };
       reader.readAsText(file);
     });
-
     // --- User Interaction Logic ---
     let selectedBody = null;
     let draggingBody = null;
@@ -846,7 +949,6 @@
     let lastPaintPoint = new THREE.Vector3();
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
-
     // Invisible plane for painting on (larger to match world)
     const paintPlane = new THREE.Mesh(
       new THREE.PlaneGeometry(200, 200),
@@ -854,7 +956,6 @@
     );
     paintPlane.rotation.x = -Math.PI / 2;
     scene.add(paintPlane);
-
     document.getElementById('paint-btn').addEventListener('click', () => {
         paintMode = !paintMode;
         document.getElementById('paint-btn').classList.toggle('active', paintMode);
@@ -865,16 +966,13 @@
           document.getElementById('paint-btn').textContent = '🎨 Paint Mode';
         }
     });
-
     function getMouseIntersection() {
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObject(paintPlane);
       return intersects.length > 0 ? intersects[0].point : null;
     }
-
     renderer.domElement.addEventListener('pointerdown', e => {
       mouse.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
-      
       if (paintMode) {
         isPainting = true;
         controls.enabled = false;
@@ -892,7 +990,6 @@
           selectedBody.mesh.material.color.setHex(selectedBody.originalColor || 0xffffff);
         }
         selectedBody = null;
-
         if(intersects.length) {
           const mesh = intersects[0].object;
           selectedBody = world.bodies.find(b => b.mesh === mesh);
@@ -906,10 +1003,8 @@
         updateObjectInfo();
       }
     });
-
     renderer.domElement.addEventListener('pointermove', e => {
       mouse.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
-      
       if (paintMode && isPainting) {
         const point = getMouseIntersection();
         if (point && point.distanceTo(lastPaintPoint) > 1.2) {
@@ -922,11 +1017,10 @@
           draggingBody.position.x = point.x;
           draggingBody.position.z = point.z;
           draggingBody.velocity = Vec3.zero();
-          draggingBody.mesh.position.set(point.x, draggingBody.position.y, point.z);
+          draggingBody.mesh.position.set(point.x, draggingBody.position.y, draggingBody.position.z);
         }
       }
     });
-    
     renderer.domElement.addEventListener('pointerup', e => {
       isPainting = false;
       draggingBody = null;
@@ -934,7 +1028,6 @@
         controls.enabled = true;
       }
     });
-
     function updateObjectInfo() {
       const infoDiv = document.getElementById('object-info');
       if(selectedBody) {
@@ -945,14 +1038,13 @@
           Mass: ${selectedBody.mass.toFixed(2)}<br>
           Position: (${selectedBody.position.x.toFixed(2)}, ${selectedBody.position.y.toFixed(2)}, ${selectedBody.position.z.toFixed(2)})<br>
           Velocity: ${selectedBody.velocity.length().toFixed(2)}<br>
-          Friction: ${selectedBody.friction.toFixed(2)}<br>
           Restitution: ${selectedBody.restitution.toFixed(2)}<br>
+          ${selectedBody.isSun ? '☀️ This is the Sun' : ''}
         `;
       } else {
         infoDiv.innerHTML = '';
       }
     }
-
     // --- Simulation Loop & Stats ---
     let lastTime = performance.now(), frameCount = 0, lastStatsTime = performance.now();
     function animate() {
@@ -976,14 +1068,13 @@
           Collisions: ${world.collisionCount}<br>
           Gravity: ${world.gravity.y}<br>
           Time Scale: ${timeScale.toFixed(2)}<br>
-          World: 100×100×100 units
+          World: ${world.bounds.x}×${world.bounds.y}×${world.bounds.z} units
         `;
         frameCount = 0;
         lastStatsTime = now;
       }
       if(selectedBody) updateObjectInfo();
     }
-
     // --- UI Sidebar/Overlay ---
     document.getElementById('start-button').onclick = () => {
       document.getElementById('loading-overlay').style.display='none';
@@ -993,18 +1084,18 @@
       animate();
     };
     document.getElementById('toggle-sidebar').onclick = () => document.body.classList.toggle('sidebar-visible');
-
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
-
     // Initialize slider value displays
     document.getElementById('gravity-value').textContent = gravitySlider.value;
     document.getElementById('timescale-value').textContent = timescaleSlider.value;
     document.getElementById('friction-value').textContent = document.getElementById('friction-slider').value;
     document.getElementById('restitution-value').textContent = document.getElementById('restitution-slider').value;
+    document.getElementById('worldsize-value').textContent = worldSizeSlider.value;
+    document.getElementById('sun-gravity-value').textContent = sunGravitySlider.value;
   </script>
 </body>
 </html>
