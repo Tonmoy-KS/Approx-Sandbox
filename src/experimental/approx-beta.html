@@ -1,0 +1,2178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Approx Sandbox - 3D Physics Engine — Experimental Beta Version</title>
+  <style>
+    :root {
+      --primary: #00bfff;
+      --primary-dark: #0077b6;
+      --secondary: #4ecdc4;
+      --background: #0a0f1a;
+      --sidebar-bg: #111827;
+      --text: #e0e0e0;
+      --text-secondary: #a0aec0;
+      --success: #38a169;
+      --warning: #d69e2e;
+      --danger: #e53e3e;
+      --card-bg: rgba(20, 30, 45, 0.7);
+      --border: rgba(0, 191, 255, 0.3);
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: var(--background);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    canvas {
+      display: block;
+      flex: 1;
+    }
+    
+    #loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(135deg, var(--background) 0%, #111827 100%);
+      z-index: 999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.5s ease;
+    }
+    
+    #loading-box {
+      background: rgba(15, 25, 35, 0.95);
+      border: 2px solid var(--primary);
+      border-radius: 16px;
+      padding: 40px;
+      text-align: center;
+      box-shadow: 0 0 60px rgba(0, 191, 255, 0.4);
+      max-width: 600px;
+      width: 90%;
+      backdrop-filter: blur(10px);
+    }
+    
+    #loading-box h1 {
+      font-size: 2.8rem;
+      margin-bottom: 20px;
+      color: var(--primary);
+      font-weight: 800;
+      letter-spacing: -1px;
+      text-shadow: 0 0 20px rgba(0, 191, 255, 0.5);
+    }
+    
+    #loading-box h2 {
+      font-size: 1.8rem;
+      margin-bottom: 25px;
+      color: var(--secondary);
+      font-weight: 600;
+    }
+    
+    #loading-box p {
+      color: var(--text);
+      margin-bottom: 28px;
+      line-height: 1.7;
+      font-size: 1.2em;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    
+    #model-input {
+      margin: 20px 0;
+      padding: 14px;
+      border: 2px dashed var(--primary);
+      border-radius: 10px;
+      background: rgba(0, 191, 255, 0.1);
+      color: var(--text);
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 1.1em;
+    }
+    
+    #file-list {
+      list-style: none;
+      max-height: 150px;
+      overflow-y: auto;
+      margin: 20px 0;
+      padding: 0 10px;
+    }
+    
+    #file-list li {
+      background: rgba(30, 45, 60, 0.7);
+      padding: 10px 15px;
+      margin: 8px 0;
+      border-radius: 8px;
+      font-size: 0.95em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease;
+      border-left: 3px solid transparent;
+    }
+    
+    #file-list li:hover {
+      background: rgba(40, 60, 80, 0.8);
+      border-left: 3px solid var(--primary);
+    }
+    
+    #start-button {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: var(--background);
+      border: none;
+      padding: 16px 40px;
+      border-radius: 10px;
+      font-size: 1.2em;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 16px;
+      transition: all 0.3s ease;
+      letter-spacing: 1px;
+      box-shadow: 0 4px 20px rgba(0, 191, 255, 0.4);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    #start-button:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 6px 25px rgba(0, 191, 255, 0.6);
+    }
+    
+    #toggle-sidebar {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 200;
+      background: var(--primary);
+      color: var(--background);
+      border: none;
+      border-radius: 0 8px 8px 0;
+      font-size: 1.4em;
+      width: 50px;
+      height: 50px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      box-shadow: 2px 0 8px rgba(0, 191, 255, 0.4);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    #toggle-sidebar:hover {
+      background: var(--primary-dark);
+      box-shadow: 2px 0 12px rgba(0, 191, 255, 0.6);
+    }
+    
+    #sidebar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 380px;
+      height: 100vh;
+      background: var(--sidebar-bg);
+      color: var(--text);
+      z-index: 100;
+      box-sizing: border-box;
+      border-right: 2px solid var(--primary);
+      box-shadow: 2px 0 24px rgba(0, 191, 255, 0.3);
+      transform: translateX(-100%);
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      padding: 24px;
+      overflow-y: auto;
+    }
+    
+    body.sidebar-visible #sidebar {
+      transform: translateX(0);
+    }
+    
+    body.sidebar-visible #toggle-sidebar {
+      left: 380px;
+    }
+    
+    #sidebar h1 {
+      font-size: 1.8em;
+      margin-bottom: 20px;
+      color: var(--primary);
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      text-shadow: 0 0 10px rgba(0, 191, 255, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    #sidebar h2 {
+      font-size: 1.3em;
+      margin: 24px 0 16px 0;
+      color: var(--secondary);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .control-group {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border);
+    }
+    
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 16px;
+    }
+    
+    .control-row:last-child {
+      margin-bottom: 0;
+    }
+    
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    
+    .slider-container {
+      position: relative;
+    }
+    
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(to right, #1e2d3d, var(--primary));
+      outline: none;
+      margin: 10px 0;
+      border: 1px solid var(--primary);
+    }
+    
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(0, 191, 255, 0.8);
+      border: 2px solid var(--background);
+    }
+    
+    input[type="range"]::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 12px rgba(0, 191, 255, 0.8);
+      border: 2px solid var(--background);
+    }
+    
+    .slider-value {
+      position: absolute;
+      right: 0;
+      top: -24px;
+      color: var(--primary);
+      font-weight: 700;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    
+    select, button {
+      width: 100%;
+      padding: 12px 18px;
+      border-radius: 8px;
+      background: rgba(30, 45, 60, 0.7);
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-size: 1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      margin-bottom: 12px;
+    }
+    
+    select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3e%3cpath fill='%2300bfff' d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      background-size: 18px;
+      padding-right: 48px;
+    }
+    
+    button:hover, select:hover {
+      background: rgba(0, 60, 80, 0.8);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 191, 255, 0.25);
+    }
+    
+    button.active {
+      background: var(--primary);
+      color: var(--background);
+      font-weight: 700;
+      box-shadow: 0 0 16px rgba(0, 191, 255, 0.5);
+      transform: translateY(-1px);
+    }
+    
+    .btn-group {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .btn-group button {
+      margin-bottom: 0;
+    }
+    
+    #object-info {
+      background: var(--card-bg);
+      padding: 16px;
+      border-radius: 12px;
+      margin-top: 18px;
+      font-size: 0.94em;
+      line-height: 1.6;
+      border: 1px solid var(--border);
+    }
+    
+    #object-info b {
+      color: var(--primary);
+      display: block;
+      margin-bottom: 10px;
+      font-size: 1.1em;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+    }
+    
+    #object-info p {
+      margin: 6px 0;
+    }
+    
+    #stats {
+      background: var(--card-bg);
+      padding: 16px;
+      border-radius: 12px;
+      margin-top: 24px;
+      font-size: 0.94em;
+      line-height: 1.5;
+      border: 1px solid var(--border);
+    }
+    
+    #stats h3 {
+      color: var(--secondary);
+      margin-bottom: 12px;
+      font-size: 1.1em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    #stats p {
+      margin: 6px 0;
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    .highlighted {
+      outline: 4px solid #00ff40 !important;
+      outline-offset: 2px;
+      box-shadow: 0 0 20px rgba(0, 255, 64, 0.5);
+    }
+    
+    .mode-indicator {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.85em;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+    
+    .orbit-mode .mode-indicator {
+      background: rgba(78, 205, 196, 0.2);
+      color: var(--secondary);
+    }
+    
+    .fluid-mode .mode-indicator {
+      background: rgba(56, 161, 105, 0.2);
+      color: var(--success);
+    }
+    
+    .magnetic-mode .mode-indicator {
+      background: rgba(214, 158, 46, 0.2);
+      color: var(--warning);
+    }
+    
+    @media (max-width: 768px) {
+      #sidebar {
+        width: 320px;
+      }
+      
+      body.sidebar-visible #toggle-sidebar {
+        left: 320px;
+      }
+      
+      #loading-box {
+        padding: 30px 20px;
+        margin: 15px;
+      }
+      
+      #loading-box h1 {
+        font-size: 2.2rem;
+      }
+      
+      .btn-group {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      #sidebar {
+        width: 100%;
+        transform: translateX(-100%);
+      }
+      
+      body.sidebar-visible #sidebar {
+        transform: translateX(0);
+      }
+      
+      body.sidebar-visible #toggle-sidebar {
+        left: 0;
+        transform: translateX(100%);
+      }
+    }
+  </style>
+  <script type="importmap">
+    { "imports": {
+      "three": "https://unpkg.com/three@0.157.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <div id="loading-overlay">
+    <div id="loading-box">
+      <h1>Approx Sandbox</h1>
+      <h2>3D Physics Engine</h2>
+      <p>Drag & Drop GLB/GLTF models, or click Start to begin your physics simulation.</p>
+      <input type="file" id="model-input" accept=".glb,.gltf" multiple>
+      <ul id="file-list"></ul>
+      <button id="start-button">
+      <h1>WARNING: THIS IS A EXPERIMENTAL VERSION, MAY CONTAIN BUGS AND CRITICAL FLAWS. BE CAUTIOUS</h1>
+        <span>Start Simulation</span>
+      </button>
+    </div>
+  </div>
+  
+  <button id="toggle-sidebar">☰</button>
+  <div id="sidebar">
+    <h1>Physics Controls</h1>
+    
+    <div class="control-group">
+      <h2>Simulation Parameters</h2>
+      
+      <div class="control-row">
+        <div class="control-label">
+          <span>Gravity</span>
+          <span id="gravity-value" class="slider-value">-15</span>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="gravity-slider" min="-50" max="50" value="-15">
+        </div>
+      </div>
+      
+      <div class="control-row">
+        <div class="control-label">
+          <span>Time Scale</span>
+          <span id="timescale-value" class="slider-value">1.00</span>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="timescale-slider" min="0.1" max="3" step="0.01" value="1">
+        </div>
+      </div>
+      
+      <div class="control-row">
+        <div class="control-label">
+          <span>World Size</span>
+          <span id="worldsize-value" class="slider-value">100</span>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="worldsize-slider" min="50" max="500" value="100">
+        </div>
+      </div>
+    </div>
+    
+    <div class="control-group">
+      <h2>Material Presets</h2>
+      
+      <select id="material-preset">
+        <option value="custom">Custom Properties</option>
+        <option value="steel">Steel</option>
+        <option value="rubber">Rubber</option>
+        <option value="granite">Granite</option>
+        <option value="wood">Wood</option>
+        <option value="ice">Ice</option>
+        <option value="foam">Foam</option>
+      </select>
+      
+      <div class="control-row">
+        <div class="control-label">
+          <span>Friction</span>
+          <span id="friction-value" class="slider-value">0.30</span>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="friction-slider" min="0" max="1" step="0.01" value="0.3">
+        </div>
+      </div>
+      
+      <div class="control-row">
+        <div class="control-label">
+          <span>Restitution</span>
+          <span id="restitution-value" class="slider-value">0.40</span>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="restitution-slider" min="0" max="1" step="0.01" value="0.4">
+        </div>
+      </div>
+    </div>
+    
+    <div class="control-group">
+      <h2>Object Properties</h2>
+      
+      <div class="control-row">
+        <div class="control-label">
+          <span>Mass</span>
+          <span id="mass-value" class="slider-value">2.00</span>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="mass-slider" min="0.1" max="20" step="0.1" value="2">
+        </div>
+      </div>
+      
+      <div class="control-row">
+        <div class="control-label">
+          <span>Size/Radius</span>
+          <span id="size-value" class="slider-value">1.00</span>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="size-slider" min="0.2" max="5" step="0.1" value="1">
+        </div>
+      </div>
+      
+      <div class="control-row">
+        <label>Shape Type</label>
+        <select id="spawn-shape">
+          <option value="Sphere">Sphere</option>
+          <option value="Box">Box</option>
+          <option value="Cylinder">Cylinder</option>
+          <option value="Compound">Compound Shape</option>
+        </select>
+      </div>
+      
+      <button id="shoot-btn">🧱 Place Object</button>
+      <button id="spawn-random-btn">🎲 Spawn Random Object</button>
+    </div>
+    
+    <div class="control-group">
+      <h2>Interaction</h2>
+      <button id="paint-btn">🎨 Paint Mode</button>
+      <button id="add-sun-btn">☀️ Light Orb</button>
+    </div>
+    
+    <div class="control-group">
+      <h2>Simulation Modes</h2>
+      
+      <button id="orbit-mode-btn">🌌 Toggle Orbit Mode</button>
+      <button id="fluid-mode-btn">💧 Toggle Fluid Dynamics</button>
+      <button id="magnetic-mode-btn">🧲 Toggle Magnetic Fields</button>
+      
+      <div class="control-row">
+        <div class="control-label">
+          <span>Fluid Density</span>
+          <span id="fluid-density-value" class="slider-value">0.50</span>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="fluid-density-slider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+      </div>
+      
+      <div class="control-row">
+        <div class="control-label">
+          <span>Magnetic Strength</span>
+          <span id="magnetic-strength-value" class="slider-value">0.30</span>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="magnetic-strength-slider" min="0" max="1" step="0.01" value="0.3">
+        </div>
+      </div>
+    </div>
+    
+    <div class="control-group">
+      <h2>World Management</h2>
+      
+      <button id="reset-btn">↩️ Reset World</button>
+      
+      <div class="btn-group">
+        <button id="pause-btn">⏸️ Pause</button>
+        <button id="resume-btn" style="display:none;">▶️ Resume</button>
+      </div>
+    </div>
+    
+    <div class="control-group">
+      <h2>Camera Controls</h2>
+      
+      <div class="btn-group">
+        <button id="cam-front-btn">Front</button>
+        <button id="cam-top-btn">Top</button>
+        <button id="cam-side-btn">Side</button>
+        <button id="cam-orbit-btn">Orbit</button>
+      </div>
+    </div>
+    
+    <div class="control-group">
+      <h2>Scene Management</h2>
+      
+      <button id="reset-object-btn">🔄 Reset Selected</button>
+      <button id="save-btn">💾 Save Scene</button>
+      <button id="load-btn">📂 Load Scene</button>
+      <button id="import-btn">📥 Import Scene</button>
+      <input type="file" id="import-scene-input" accept="application/json" style="display:none;">
+    </div>
+    
+    <div id="object-info">
+      <b>Selected Object</b>
+      <p>No object selected</p>
+    </div>
+    
+    <div id="stats">
+      <h3>Performance & World Stats</h3>
+      <p><span>FPS:</span> <span id="fps-value">0</span></p>
+      <p><span>Bodies:</span> <span id="bodies-value">0</span></p>
+      <p><span>Collisions:</span> <span id="collisions-value">0</span></p>
+      <p><span>Mode:</span> <span id="mode-value">Standard</span></p>
+    </div>
+  </div>
+  
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    
+    // --- Vector/Quaternion/Shape ---
+    class Vec3 {
+      constructor(x=0, y=0, z=0) { this.x=x; this.y=y; this.z=z;}
+      add(v) { return new Vec3(this.x+v.x, this.y+v.y, this.z+v.z);}
+      sub(v) { return new Vec3(this.x-v.x, this.y-v.y, this.z-v.z);}
+      mul(s) { return new Vec3(this.x*s, this.y*s, this.z*s);}
+      dot(v) { return this.x*v.x + this.y*v.y + this.z*v.z;}
+      cross(v) { return new Vec3(this.y*v.z - this.z*v.y, this.z*v.x - this.x*v.z, this.x*v.y - this.y*v.x); }
+      length() { return Math.sqrt(this.x*this.x+this.y*this.y+this.z*this.z);}
+      lengthSq() { return this.x*this.x+this.y*this.y+this.z*this.z;}
+      normalize() { const l=this.length(); return l===0?new Vec3():this.mul(1/l);}
+      copy() { return new Vec3(this.x,this.y,this.z);}
+      set(x, y, z) {this.x=x;this.y=y;this.z=z;}
+      static zero() { return new Vec3(0,0,0);}
+      static fromArray(arr) { return new Vec3(arr[0], arr[1], arr[2]); }
+    }
+    
+    class Quaternion {
+      constructor(x=0,y=0,z=0,w=1){
+        this.x=x;this.y=y;this.z=z;this.w=w;
+      }
+      
+      multiply(q) {
+        return new Quaternion(
+          this.w * q.x + this.x * q.w + this.y * q.z - this.z * q.y,
+          this.w * q.y + this.y * q.w + this.z * q.x - this.x * q.z,
+          this.w * q.z + this.z * q.w + this.x * q.y - this.y * q.x,
+          this.w * q.w - this.x * q.x - this.y * q.y - this.z * q.z
+        );
+      }
+      
+      rotateVector(v) {
+        const x = this.x, y = this.y, z = this.z, w = this.w;
+        const ix = w * v.x + y * v.z - z * v.y;
+        const iy = w * v.y + z * v.x - x * v.z;
+        const iz = w * v.z + x * v.y - y * v.x;
+        const iw = -x * v.x - y * v.y - z * v.z;
+        return new Vec3(
+          ix * w + iw * -x + iy * -z - iz * -y,
+          iy * w + iw * -y + iz * -x - ix * -z,
+          iz * w + iw * -z + ix * -y - iy * -x
+        );
+      }
+      
+      static fromAxisAngle(axis, angle) {
+        const halfAngle = angle / 2;
+        const s = Math.sin(halfAngle);
+        return new Quaternion(
+          axis.x * s,
+          axis.y * s,
+          axis.z * s,
+          Math.cos(halfAngle)
+        );
+      }
+      
+      static identity() {
+        return new Quaternion(0, 0, 0, 1);
+      }
+      
+      slerp(q, t) {
+        let dot = this.x*q.x + this.y*q.y + this.z*q.z + this.w*q.w;
+        let q2 = q;
+        if (dot < 0.0) {
+          q2 = new Quaternion(-q.x, -q.y, -q.z, -q.w);
+          dot = -dot;
+        }
+        if (dot > 0.9995) {
+          return new Quaternion(
+            this.x + t * (q2.x - this.x),
+            this.y + t * (q2.y - this.y),
+            this.z + t * (q2.z - this.z),
+            this.w + t * (q2.w - this.w)
+          ).normalize();
+        }
+        const theta_0 = Math.acos(dot);
+        const theta = theta_0 * t;
+        const sin_theta = Math.sin(theta);
+        const sin_theta_0 = Math.sin(theta_0);
+        const s0 = Math.cos(theta) - dot * sin_theta / sin_theta_0;
+        const s1 = sin_theta / sin_theta_0;
+        return new Quaternion(
+          s0 * this.x + s1 * q2.x,
+          s0 * this.y + s1 * q2.y,
+          s0 * this.z + s1 * q2.z,
+          s0 * this.w + s1 * q2.w
+        );
+      }
+      
+      normalize() {
+        const length = Math.sqrt(this.x*this.x + this.y*this.y + this.z*this.z + this.w*this.w);
+        if (length > 0) {
+          return new Quaternion(
+            this.x / length,
+            this.y / length,
+            this.z / length,
+            this.w / length
+          );
+        }
+        return new Quaternion(0, 0, 0, 1);
+      }
+      
+      toEuler() {
+        const x = this.x, y = this.y, z = this.z, w = this.w;
+        const sinr_cosp = 2 * (w * x + y * z);
+        const cosr_cosp = 1 - 2 * (x * x + y * y);
+        const roll = Math.atan2(sinr_cosp, cosr_cosp);
+        const sinp = 2 * (w * y - z * x);
+        let pitch;
+        if (Math.abs(sinp) >= 1) {
+          pitch = Math.sign(sinp) * Math.PI / 2;
+        } else {
+          pitch = Math.asin(sinp);
+        }
+        const siny_cosp = 2 * (w * z + x * y);
+        const cosy_cosp = 1 - 2 * (y * y + z * z);
+        const yaw = Math.atan2(siny_cosp, cosy_cosp);
+        return new Vec3(roll, pitch, yaw);
+      }
+    }
+    
+    const SHAPE_TYPE = { SPHERE:0, BOX:1, CYLINDER:2, CUSTOM:3 };
+    
+    class SphereShape { 
+      constructor(radius) { 
+        this.type = SHAPE_TYPE.SPHERE; 
+        this.radius = radius; 
+      }
+    }
+    
+    class BoxShape { 
+      constructor(size) { 
+        this.type = SHAPE_TYPE.BOX; 
+        this.size = size; 
+      }
+    }
+    
+    class CylinderShape {
+      constructor(radius=1, height=2) {
+        this.type = SHAPE_TYPE.CYLINDER;
+        this.radius = radius;
+        this.height = height;
+      }
+    }
+    
+    class CompoundShape {
+      constructor(shapes) {
+        this.type = SHAPE_TYPE.CUSTOM;
+        this.shapes = shapes; // array of {shape, offset}
+      }
+    }
+    
+    // --- Rigid Body ---
+    class RigidBody {
+      constructor(position, shape, mass, mesh) {
+        this.position = position.copy();
+        this.velocity = Vec3.zero();
+        this.force = Vec3.zero();
+        this.shape = shape;
+        this.mass = mass;
+        this.invMass = mass>0 ? 1/mass : 0;
+        this.mesh = mesh;
+        this.restitution = 0.4;
+        this.friction = 0.3;
+        this.angularVelocity = Vec3.zero();
+        this.orientation = Quaternion.identity();
+        this.torque = Vec3.zero();
+        this.inertiaTensor = this.calculateInertiaTensor(mass);
+        this.invInertiaTensor = this.invertInertiaTensor(this.inertiaTensor);
+        this.originalColor = mesh.material.color.getHex();
+        this.isSun = false;
+        this.magneticCharge = Math.random() > 0.5 ? 1 : -1;
+        this.fluidDensity = 0.5;
+        this.materialType = 'custom';
+      }
+      
+      calculateInertiaTensor(mass) {
+        if (this.shape.type === SHAPE_TYPE.SPHERE) {
+          const i = (2/5) * mass * this.shape.radius * this.shape.radius;
+          return new Vec3(i, i, i);
+        } else if (this.shape.type === SHAPE_TYPE.BOX) {
+          const s = this.shape.size;
+          const i = (1/12) * mass * (s*s + s*s);
+          return new Vec3(i, i, i);
+        } else if (this.shape.type === SHAPE_TYPE.CYLINDER) {
+          const r = this.shape.radius;
+          const h = this.shape.height;
+          const ix = (1/12) * mass * (3*r*r + h*h);
+          const iz = (1/2) * mass * r*r;
+          return new Vec3(ix, ix, iz);
+        } else {
+          return new Vec3(1, 1, 1);
+        }
+      }
+      
+      invertInertiaTensor(tensor) {
+        return new Vec3(
+          tensor.x > 0 ? 1/tensor.x : 0,
+          tensor.y > 0 ? 1/tensor.y : 0,
+          tensor.z > 0 ? 1/tensor.z : 0
+        );
+      }
+      
+      applyForce(f) { 
+        this.force = this.force.add(f); 
+      }
+      
+      applyTorque(t) { 
+        this.torque = this.torque.add(t); 
+      }
+      
+      integrate(dt) {
+        if(this.invMass===0) return;
+        
+        // Linear motion
+        this.velocity = this.velocity.add(this.force.mul(dt * this.invMass));
+        this.position = this.position.add(this.velocity.mul(dt));
+        
+        // Angular motion
+        const localTorque = this.orientation.rotateVector(this.torque);
+        const localAngularAccel = new Vec3(
+          localTorque.x * this.invInertiaTensor.x,
+          localTorque.y * this.invInertiaTensor.y,
+          localTorque.z * this.invInertiaTensor.z
+        );
+        const worldAngularAccel = this.orientation.rotateVector(localAngularAccel);
+        this.angularVelocity = this.angularVelocity.add(worldAngularAccel.mul(dt));
+        
+        // Update orientation
+        const axis = this.angularVelocity.normalize();
+        const angle = this.angularVelocity.length() * dt;
+        if (angle > 0.0001) {
+          const rotation = Quaternion.fromAxisAngle(axis, angle);
+          this.orientation = rotation.multiply(this.orientation).normalize();
+        }
+        
+        // Update mesh
+        if(this.mesh) {
+          this.mesh.position.set(this.position.x, this.position.y, this.position.z);
+          const e = this.orientation.toEuler();
+          this.mesh.rotation.set(e.x, e.y, e.z);
+        }
+        
+        this.force = Vec3.zero();
+        this.torque = Vec3.zero();
+      }
+    }
+    
+    // --- Physics World ---
+    class PhysicsWorld {
+      constructor() {
+        this.bodies = [];
+        this.gravity = new Vec3(0, -15, 0);
+        this.bounds = {x:100, y:100, z:100};
+        this.collisionCount = 0;
+        this.orbitMode = false;
+        this.fluidMode = false;
+        this.magneticMode = false;
+        this.sunGravity = 50;
+        this.fluidDensity = 0.5;
+        this.magneticStrength = 0.3;
+      }
+      
+      addBody(b) { this.bodies.push(b);}
+      removeBody(b) { const i=this.bodies.indexOf(b); if(i>-1) this.bodies.splice(i,1);}
+      
+      setWorldSize(size) {
+        this.bounds = {x:size, y:size, z:size};
+        ground.geometry = new THREE.PlaneGeometry(size, size);
+        gridHelper.geometry = new THREE.PlaneGeometry(size, size);
+        gridHelper.position.set(0, 0.01, 0);
+        boundsBox.geometry = new THREE.BoxGeometry(size, size, size);
+        boundsBox.position.set(0, size/2, 0);
+      }
+      
+      update(dt) {
+        this.collisionCount = 0;
+        
+        for(const b of this.bodies) {
+          // Standard gravity
+          if (!this.orbitMode) {
+            b.applyForce(this.gravity.mul(b.mass));
+          }
+          
+          // Fluid dynamics
+          if (this.fluidMode && b.position.y < 0) {
+            const submergedVolume = Math.min(1, Math.abs(b.position.y) / (b.shape.radius || b.shape.size/2));
+            const buoyancy = new Vec3(0, this.fluidDensity * submergedVolume * b.mass * 9.8, 0);
+            b.applyForce(buoyancy);
+            
+            const drag = b.velocity.mul(-this.fluidDensity * 0.1 * b.velocity.length());
+            b.applyForce(drag);
+          }
+          
+          // Magnetic forces
+          if (this.magneticMode && !b.isSun) {
+            for(const other of this.bodies) {
+              if (other !== b && other.magneticCharge) {
+                const dir = b.position.sub(other.position);
+                const dist = dir.length();
+                if (dist > 0.1) {
+                  const forceMag = this.magneticStrength * b.magneticCharge * other.magneticCharge / (dist * dist);
+                  const force = dir.normalize().mul(forceMag);
+                  b.applyForce(force);
+                }
+              }
+            }
+          }
+          
+          // Orbit mode gravity
+          if (this.orbitMode && !b.isSun) {
+            let sun = this.bodies.find(body => body.isSun);
+            if (sun) {
+              let dir = sun.position.sub(b.position);
+              let dist = dir.length();
+              if (dist > 0.1) {
+                let forceMag = this.sunGravity * b.mass / (dist * dist);
+                let force = dir.normalize().mul(forceMag);
+                b.applyForce(force);
+              }
+            }
+          }
+          
+          b.integrate(dt);
+        }
+        
+        // Broadphase spatial hash
+        let grid = {};
+        const gridSize = 5;
+        for(const b of this.bodies) {
+          let key = `${Math.floor(b.position.x/gridSize)}:${Math.floor(b.position.y/gridSize)}:${Math.floor(b.position.z/gridSize)}`;
+          if(!grid[key]) grid[key]=[];
+          grid[key].push(b);
+        }
+        
+        // Boundary handling
+        if (!this.orbitMode) {
+          for(const b of this.bodies) {
+            let halfSize = 0;
+            if (b.shape.type === SHAPE_TYPE.SPHERE) halfSize = b.shape.radius;
+            else if (b.shape.type === SHAPE_TYPE.BOX) halfSize = b.shape.size / 2;
+            else if (b.shape.type === SHAPE_TYPE.CYLINDER) halfSize = b.shape.height / 2;
+            
+            if(b.position.y < halfSize) {
+              b.position.y = halfSize;
+              b.velocity.y = -b.velocity.y * b.restitution;
+              b.velocity.x *= (1 - b.friction);
+              b.velocity.z *= (1 - b.friction);
+              b.angularVelocity = b.angularVelocity.mul(0.95);
+            }
+            
+            for(const axis of ['x','z']) {
+              if(b.position[axis] < -this.bounds[axis]/2 + halfSize) {
+                b.position[axis] = -this.bounds[axis]/2 + halfSize;
+                b.velocity[axis] = -b.velocity[axis] * b.restitution;
+              }
+              if(b.position[axis] > this.bounds[axis]/2 - halfSize) {
+                b.position[axis] = this.bounds[axis]/2 - halfSize;
+                b.velocity[axis] = -b.velocity[axis] * b.restitution;
+              }
+            }
+            
+            if(b.position.y > this.bounds.y - halfSize) {
+              b.position.y = this.bounds.y - halfSize;
+              b.velocity.y = -b.velocity.y * b.restitution;
+            }
+          }
+        } else {
+          for(const b of this.bodies) {
+            if (b.isSun) continue;
+            for(const axis of ['x','y','z']) {
+              if(b.position[axis] < -this.bounds[axis]/2) {
+                b.position[axis] += this.bounds[axis];
+              }
+              if(b.position[axis] > this.bounds[axis]/2) {
+                b.position[axis] -= this.bounds[axis];
+              }
+            }
+          }
+        }
+        
+        // Collision detection and response
+        for(const cell in grid) {
+          let cellBodies = grid[cell];
+          for(let i=0;i<cellBodies.length;i++) {
+            let a=cellBodies[i];
+            for(let j=i+1;j<cellBodies.length;j++) {
+              let b=cellBodies[j];
+              this.resolveCollision(a, b, dt);
+            }
+          }
+        }
+      }
+      
+      resolveCollision(a, b, dt) {
+        if (a.shape.type === SHAPE_TYPE.SPHERE && b.shape.type === SHAPE_TYPE.SPHERE) {
+          this.sphereSphereCollision(a, b);
+        } else if (a.shape.type === SHAPE_TYPE.BOX && b.shape.type === SHAPE_TYPE.BOX) {
+          this.boxBoxCollision(a, b);
+        } else if (a.shape.type === SHAPE_TYPE.CYLINDER && b.shape.type === SHAPE_TYPE.CYLINDER) {
+          this.cylinderCylinderCollision(a, b);
+        } else if (a.shape.type === SHAPE_TYPE.SPHERE && b.shape.type === SHAPE_TYPE.BOX) {
+          this.sphereBoxCollision(a, b);
+        } else if (a.shape.type === SHAPE_TYPE.BOX && b.shape.type === SHAPE_TYPE.SPHERE) {
+          this.sphereBoxCollision(b, a);
+        } else if (a.shape.type === SHAPE_TYPE.SPHERE && b.shape.type === SHAPE_TYPE.CYLINDER) {
+          this.sphereCylinderCollision(a, b);
+        } else if (a.shape.type === SHAPE_TYPE.CYLINDER && b.shape.type === SHAPE_TYPE.SPHERE) {
+          this.sphereCylinderCollision(b, a);
+        } else if (a.shape.type === SHAPE_TYPE.BOX && b.shape.type === SHAPE_TYPE.CYLINDER) {
+          this.boxCylinderCollision(a, b);
+        } else if (a.shape.type === SHAPE_TYPE.CYLINDER && b.shape.type === SHAPE_TYPE.BOX) {
+          this.boxCylinderCollision(b, a);
+        } else if (a.shape.type === SHAPE_TYPE.CUSTOM || b.shape.type === SHAPE_TYPE.CUSTOM) {
+          this.compoundCollision(a, b);
+        }
+      }
+      
+      sphereSphereCollision(a, b) {
+        const d = a.position.sub(b.position);
+        const distSqr = d.lengthSq();
+        const minDist = a.shape.radius + b.shape.radius;
+        if(distSqr < minDist * minDist && distSqr > 0) {
+          const dist = Math.sqrt(distSqr);
+          const norm = d.mul(1 / dist);
+          const penetration = minDist - dist;
+          
+          const resolveAmount = penetration * 0.8;
+          const aInvMass = a.invMass;
+          const bInvMass = b.invMass;
+          const totalInvMass = aInvMass + bInvMass;
+          if (totalInvMass > 0) {
+            a.position = a.position.add(norm.mul(resolveAmount * aInvMass / totalInvMass));
+            b.position = b.position.sub(norm.mul(resolveAmount * bInvMass / totalInvMass));
+          }
+          
+          const ra = norm.mul(-a.shape.radius);
+          const rb = norm.mul(b.shape.radius);
+          const va = a.velocity.add(a.angularVelocity.cross(ra));
+          const vb = b.velocity.add(b.angularVelocity.cross(rb));
+          const relVel = va.sub(vb);
+          const velAlongNormal = relVel.dot(norm);
+          if (velAlongNormal > 0) return;
+          
+          const e = Math.min(a.restitution, b.restitution);
+          const j = (-(1 + e) * velAlongNormal) / (aInvMass + bInvMass);
+          const impulseVec = norm.mul(j);
+          
+          a.velocity = a.velocity.add(impulseVec.mul(aInvMass));
+          b.velocity = b.velocity.sub(impulseVec.mul(bInvMass));
+          
+          a.angularVelocity = a.angularVelocity.add(ra.cross(impulseVec).mul(a.invInertiaTensor.x));
+          b.angularVelocity = b.angularVelocity.sub(rb.cross(impulseVec).mul(b.invInertiaTensor.x));
+          
+          this.collisionCount++;
+        }
+      }
+      
+      boxBoxCollision(a, b) {
+        const aPos = a.position;
+        const bPos = b.position;
+        const aSize = a.shape.size / 2;
+        const bSize = b.shape.size / 2;
+        const axes = [
+          new Vec3(1, 0, 0),
+          new Vec3(0, 1, 0),
+          new Vec3(0, 0, 1)
+        ];
+        let overlap = Number.MAX_VALUE;
+        let collisionNormal = null;
+        for (const axis of axes) {
+          const aMin = aPos.dot(axis) - aSize * Math.abs(axis.dot(axis));
+          const aMax = aPos.dot(axis) + aSize * Math.abs(axis.dot(axis));
+          const bMin = bPos.dot(axis) - bSize * Math.abs(axis.dot(axis));
+          const bMax = bPos.dot(axis) + bSize * Math.abs(axis.dot(axis));
+          if (aMax < bMin || bMax < aMin) {
+            return;
+          }
+          const axisOverlap = Math.min(aMax - bMin, bMax - aMin);
+          if (axisOverlap < overlap) {
+            overlap = axisOverlap;
+            collisionNormal = axis;
+          }
+        }
+        const dir = aPos.sub(bPos);
+        if (dir.dot(collisionNormal) < 0) {
+          collisionNormal = collisionNormal.mul(-1);
+        }
+        const resolveAmount = overlap * 0.8;
+        const aInvMass = a.invMass;
+        const bInvMass = b.invMass;
+        const totalInvMass = aInvMass + bInvMass;
+        if (totalInvMass > 0) {
+          a.position = a.position.add(collisionNormal.mul(resolveAmount * aInvMass / totalInvMass));
+          b.position = b.position.sub(collisionNormal.mul(resolveAmount * bInvMass / totalInvMass));
+        }
+        const relVel = a.velocity.sub(b.velocity);
+        const velAlongNormal = relVel.dot(collisionNormal);
+        if (velAlongNormal > 0) return;
+        const e = Math.min(a.restitution, b.restitution);
+        const j = (-(1 + e) * velAlongNormal) / totalInvMass;
+        const impulseVec = collisionNormal.mul(j);
+        a.velocity = a.velocity.add(impulseVec.mul(aInvMass));
+        b.velocity = b.velocity.sub(impulseVec.mul(bInvMass));
+        const ra = collisionNormal.mul(aSize);
+        const rb = collisionNormal.mul(-bSize);
+        a.angularVelocity = a.angularVelocity.add(ra.cross(impulseVec).mul(a.invInertiaTensor.x));
+        b.angularVelocity = b.angularVelocity.sub(rb.cross(impulseVec).mul(b.invInertiaTensor.x));
+        this.collisionCount++;
+      }
+      
+      cylinderCylinderCollision(a, b) {
+        const dx = a.position.x - b.position.x;
+        const dz = a.position.z - b.position.z;
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        const minDist = a.shape.radius + b.shape.radius;
+        const yOverlap = Math.abs(a.position.y - b.position.y) < (a.shape.height + b.shape.height)/2;
+        if (dist < minDist && yOverlap && dist > 0) {
+          const norm = new Vec3(dx/dist, 0, dz/dist);
+          const penetration = minDist - dist;
+          const resolveAmount = penetration * 0.8;
+          const aInvMass = a.invMass;
+          const bInvMass = b.invMass;
+          const totalInvMass = aInvMass + bInvMass;
+          if (totalInvMass > 0) {
+            a.position = a.position.add(norm.mul(resolveAmount * aInvMass / totalInvMass));
+            b.position = b.position.sub(norm.mul(resolveAmount * bInvMass / totalInvMass));
+          }
+          const relVel = a.velocity.sub(b.velocity);
+          const velAlongNormal = relVel.dot(norm);
+          if (velAlongNormal > 0) return;
+          const e = Math.min(a.restitution, b.restitution);
+          const j = (-(1 + e) * velAlongNormal) / totalInvMass;
+          const impulseVec = norm.mul(j);
+          a.velocity = a.velocity.add(impulseVec.mul(aInvMass));
+          b.velocity = b.velocity.sub(impulseVec.mul(bInvMass));
+          const ra = norm.mul(a.shape.radius);
+          const rb = norm.mul(-b.shape.radius);
+          a.angularVelocity = a.angularVelocity.add(ra.cross(impulseVec).mul(a.invInertiaTensor.x));
+          b.angularVelocity = b.angularVelocity.sub(rb.cross(impulseVec).mul(b.invInertiaTensor.x));
+          this.collisionCount++;
+        }
+      }
+      
+      sphereBoxCollision(sphere, box) {
+        const sphereToBox = box.position.sub(sphere.position);
+        const halfSize = box.shape.size / 2;
+        const closest = new Vec3(
+          Math.max(box.position.x - halfSize, Math.min(sphere.position.x, box.position.x + halfSize)),
+          Math.max(box.position.y - halfSize, Math.min(sphere.position.y, box.position.y + halfSize)),
+          Math.max(box.position.z - halfSize, Math.min(sphere.position.z, box.position.z + halfSize))
+        );
+        const distance = sphere.position.sub(closest);
+        const distSqr = distance.lengthSq();
+        const radiusSqr = sphere.shape.radius * sphere.shape.radius;
+        if (distSqr < radiusSqr) {
+          const dist = Math.sqrt(distSqr);
+          const norm = dist > 0 ? distance.mul(1/dist) : new Vec3(0, 1, 0);
+          const penetration = sphere.shape.radius - dist;
+          const resolveAmount = penetration * 0.8;
+          const sInvMass = sphere.invMass;
+          const bInvMass = box.invMass;
+          const totalInvMass = sInvMass + bInvMass;
+          if (totalInvMass > 0) {
+            sphere.position = sphere.position.sub(norm.mul(resolveAmount * sInvMass / totalInvMass));
+            box.position = box.position.add(norm.mul(resolveAmount * bInvMass / totalInvMass));
+          }
+          const relVel = sphere.velocity.sub(box.velocity);
+          const velAlongNormal = relVel.dot(norm);
+          if (velAlongNormal > 0) return;
+          const e = Math.min(sphere.restitution, box.restitution);
+          const j = (-(1 + e) * velAlongNormal) / totalInvMass;
+          const impulseVec = norm.mul(j);
+          sphere.velocity = sphere.velocity.add(impulseVec.mul(sInvMass));
+          box.velocity = box.velocity.sub(impulseVec.mul(bInvMass));
+          const rs = norm.mul(-sphere.shape.radius);
+          const rb = closest.sub(box.position);
+          sphere.angularVelocity = sphere.angularVelocity.add(rs.cross(impulseVec).mul(sphere.invInertiaTensor.x));
+          box.angularVelocity = box.angularVelocity.sub(rb.cross(impulseVec).mul(box.invInertiaTensor.x));
+          this.collisionCount++;
+        }
+      }
+      
+      sphereCylinderCollision(sphere, cylinder) {
+        const dx = sphere.position.x - cylinder.position.x;
+        const dz = sphere.position.z - cylinder.position.z;
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        const dy = sphere.position.y - cylinder.position.y;
+        const halfHeight = cylinder.shape.height / 2;
+        const withinHeight = Math.abs(dy) <= halfHeight + sphere.shape.radius;
+        if (withinHeight) {
+          if (dist < cylinder.shape.radius + sphere.shape.radius && dist > 0) {
+            const norm = new Vec3(dx/dist, 0, dz/dist);
+            const penetration = cylinder.shape.radius + sphere.shape.radius - dist;
+            const resolveAmount = penetration * 0.8;
+            const sInvMass = sphere.invMass;
+            const cInvMass = cylinder.invMass;
+            const totalInvMass = sInvMass + cInvMass;
+            if (totalInvMass > 0) {
+              sphere.position = sphere.position.add(norm.mul(resolveAmount * sInvMass / totalInvMass));
+              cylinder.position = cylinder.position.sub(norm.mul(resolveAmount * cInvMass / totalInvMass));
+            }
+            const relVel = sphere.velocity.sub(cylinder.velocity);
+            const velAlongNormal = relVel.dot(norm);
+            if (velAlongNormal > 0) return;
+            const e = Math.min(sphere.restitution, cylinder.restitution);
+            const j = (-(1 + e) * velAlongNormal) / totalInvMass;
+            const impulseVec = norm.mul(j);
+            sphere.velocity = sphere.velocity.add(impulseVec.mul(sInvMass));
+            cylinder.velocity = cylinder.velocity.sub(impulseVec.mul(cInvMass));
+            const rs = norm.mul(-sphere.shape.radius);
+            const rc = norm.mul(cylinder.shape.radius);
+            sphere.angularVelocity = sphere.angularVelocity.add(rs.cross(impulseVec).mul(sphere.invInertiaTensor.x));
+            cylinder.angularVelocity = cylinder.angularVelocity.sub(rc.cross(impulseVec).mul(cylinder.invInertiaTensor.x));
+            this.collisionCount++;
+            return;
+          }
+        }
+        if (dist <= cylinder.shape.radius) {
+          let capY = cylinder.position.y;
+          let normalY = 0;
+          if (dy > 0) {
+            capY += halfHeight;
+            normalY = 1;
+          } else {
+            capY -= halfHeight;
+            normalY = -1;
+          }
+          const capDist = Math.abs(sphere.position.y - capY);
+          if (capDist < sphere.shape.radius) {
+            const norm = new Vec3(0, normalY, 0);
+            const penetration = sphere.shape.radius - capDist;
+            const resolveAmount = penetration * 0.8;
+            const sInvMass = sphere.invMass;
+            const cInvMass = cylinder.invMass;
+            const totalInvMass = sInvMass + cInvMass;
+            if (totalInvMass > 0) {
+              sphere.position = sphere.position.add(norm.mul(resolveAmount * sInvMass / totalInvMass));
+              cylinder.position = cylinder.position.sub(norm.mul(resolveAmount * cInvMass / totalInvMass));
+            }
+            const relVel = sphere.velocity.sub(cylinder.velocity);
+            const velAlongNormal = relVel.dot(norm);
+            if (velAlongNormal > 0) return;
+            const e = Math.min(sphere.restitution, cylinder.restitution);
+            const j = (-(1 + e) * velAlongNormal) / totalInvMass;
+            const impulseVec = norm.mul(j);
+            sphere.velocity = sphere.velocity.add(impulseVec.mul(sInvMass));
+            cylinder.velocity = cylinder.velocity.sub(impulseVec.mul(cInvMass));
+            const rs = norm.mul(-sphere.shape.radius);
+            const rc = new Vec3(0, normalY * halfHeight, 0);
+            sphere.angularVelocity = sphere.angularVelocity.add(rs.cross(impulseVec).mul(sphere.invInertiaTensor.x));
+            cylinder.angularVelocity = cylinder.angularVelocity.sub(rc.cross(impulseVec).mul(cylinder.invInertiaTensor.x));
+            this.collisionCount++;
+          }
+        }
+      }
+      
+      boxCylinderCollision(box, cylinder) {
+        const halfSize = box.shape.size / 2;
+        const halfHeight = cylinder.shape.height / 2;
+        const dx = Math.max(Math.abs(cylinder.position.x - box.position.x) - halfSize, 0);
+        const dz = Math.max(Math.abs(cylinder.position.z - box.position.z) - halfSize, 0);
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        if (dist < cylinder.shape.radius) {
+          const dy = Math.abs(cylinder.position.y - box.position.y);
+          if (dy < halfSize + halfHeight) {
+            const norm = new Vec3(
+              cylinder.position.x - box.position.x,
+              0,
+              cylinder.position.z - box.position.z
+            ).normalize();
+            if (norm.length() === 0) norm.set(1, 0, 0);
+            const penetration = cylinder.shape.radius - dist;
+            const resolveAmount = penetration * 0.8;
+            const bInvMass = box.invMass;
+            const cInvMass = cylinder.invMass;
+            const totalInvMass = bInvMass + cInvMass;
+            if (totalInvMass > 0) {
+              box.position = box.position.sub(norm.mul(resolveAmount * bInvMass / totalInvMass));
+              cylinder.position = cylinder.position.add(norm.mul(resolveAmount * cInvMass / totalInvMass));
+            }
+            const relVel = box.velocity.sub(cylinder.velocity);
+            const velAlongNormal = relVel.dot(norm);
+            if (velAlongNormal > 0) return;
+            const e = Math.min(box.restitution, cylinder.restitution);
+            const j = (-(1 + e) * velAlongNormal) / totalInvMass;
+            const impulseVec = norm.mul(j);
+            box.velocity = box.velocity.add(impulseVec.mul(bInvMass));
+            cylinder.velocity = cylinder.velocity.sub(impulseVec.mul(cInvMass));
+            const rb = norm.mul(halfSize);
+            const rc = norm.mul(cylinder.shape.radius);
+            box.angularVelocity = box.angularVelocity.add(rb.cross(impulseVec).mul(box.invInertiaTensor.x));
+            cylinder.angularVelocity = cylinder.angularVelocity.sub(rc.cross(impulseVec).mul(cylinder.invInertiaTensor.x));
+            this.collisionCount++;
+          }
+        }
+      }
+      
+      compoundCollision(a, b) {
+        const aRadius = this.getBoundingRadius(a);
+        const bRadius = this.getBoundingRadius(b);
+        const d = a.position.sub(b.position);
+        const distSqr = d.lengthSq();
+        const minDist = aRadius + bRadius;
+        if(distSqr < minDist * minDist && distSqr > 0) {
+          const dist = Math.sqrt(distSqr);
+          const norm = d.mul(1 / dist);
+          const penetration = minDist - dist;
+          const resolveAmount = penetration * 0.8;
+          const aInvMass = a.invMass;
+          const bInvMass = b.invMass;
+          const totalInvMass = aInvMass + bInvMass;
+          if (totalInvMass > 0) {
+            a.position = a.position.add(norm.mul(resolveAmount * aInvMass / totalInvMass));
+            b.position = b.position.sub(norm.mul(resolveAmount * bInvMass / totalInvMass));
+          }
+          const relVel = a.velocity.sub(b.velocity);
+          const velAlongNormal = relVel.dot(norm);
+          if (velAlongNormal > 0) return;
+          const e = Math.min(a.restitution, b.restitution);
+          const j = (-(1 + e) * velAlongNormal) / totalInvMass;
+          const impulseVec = norm.mul(j);
+          a.velocity = a.velocity.add(impulseVec.mul(aInvMass));
+          b.velocity = b.velocity.sub(impulseVec.mul(bInvMass));
+          a.angularVelocity = a.angularVelocity.add(norm.cross(impulseVec).mul(a.invInertiaTensor.x));
+          b.angularVelocity = b.angularVelocity.sub(norm.cross(impulseVec).mul(b.invInertiaTensor.x));
+          this.collisionCount++;
+        }
+      }
+      
+      getBoundingRadius(body) {
+        if (body.shape.type === SHAPE_TYPE.SPHERE) {
+          return body.shape.radius;
+        } else if (body.shape.type === SHAPE_TYPE.BOX) {
+          return (body.shape.size / 2) * Math.sqrt(3);
+        } else if (body.shape.type === SHAPE_TYPE.CYLINDER) {
+          return Math.sqrt(body.shape.radius * body.shape.radius + (body.shape.height/2) * (body.shape.height/2));
+        } else {
+          let maxDist = 0;
+          for (const subShape of body.shape.shapes) {
+            let dist = 0;
+            if (subShape.shape.type === SHAPE_TYPE.SPHERE) {
+              dist = subShape.offset.length() + subShape.shape.radius;
+            } else if (subShape.shape.type === SHAPE_TYPE.BOX) {
+              dist = subShape.offset.length() + (subShape.shape.size / 2) * Math.sqrt(3);
+            } else if (subShape.shape.type === SHAPE_TYPE.CYLINDER) {
+              dist = subShape.offset.length() + Math.sqrt(
+                subShape.shape.radius * subShape.shape.radius + 
+                (subShape.shape.height/2) * (subShape.shape.height/2)
+              );
+            }
+            maxDist = Math.max(maxDist, dist);
+          }
+          return maxDist;
+        }
+      }
+    }
+    
+    // --- Rendering & UI ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0f1a);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 200);
+    camera.position.set(0, 25, 50);
+    const renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+    
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 10;
+    controls.maxDistance = 150;
+    
+    // Enhanced ground
+    const groundGeo = new THREE.PlaneGeometry(100, 100);
+    const groundMat = new THREE.MeshStandardMaterial({ 
+      color: 0x1a2b3c,
+      roughness: 0.7,
+      metalness: 0.1
+    });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0;
+    ground.receiveShadow = true;
+    scene.add(ground);
+    
+    // Detailed grid helper
+    const gridHelper = new THREE.GridHelper(100, 50, 0x00bfff, 0x004466);
+    gridHelper.position.y = 0.01;
+    scene.add(gridHelper);
+    
+    // World bounding box
+    const boundsBox = new THREE.BoxHelper(new THREE.Mesh(
+      new THREE.BoxGeometry(100, 100, 100)
+    ), 0x00bfff);
+    boundsBox.position.set(0, 50, 0);
+    scene.add(boundsBox);
+    
+    // Lighting
+    const ambient = new THREE.AmbientLight(0xffffff, 0.3);
+    scene.add(ambient);
+    
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(30, 50, 30);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 4096;
+    dirLight.shadow.mapSize.height = 4096;
+    dirLight.shadow.camera.near = 0.5;
+    dirLight.shadow.camera.far = 150;
+    dirLight.shadow.camera.left = -60;
+    dirLight.shadow.camera.right = 60;
+    dirLight.shadow.camera.top = 60;
+    dirLight.shadow.camera.bottom = -60;
+    scene.add(dirLight);
+    
+    const fillLight1 = new THREE.DirectionalLight(0x00bfff, 0.4);
+    fillLight1.position.set(-30, 30, -30);
+    scene.add(fillLight1);
+    
+    const fillLight2 = new THREE.DirectionalLight(0xff6b6b, 0.3);
+    fillLight2.position.set(0, 40, -40);
+    scene.add(fillLight2);
+    
+    // Physics setup
+    const world = new PhysicsWorld();
+    const gltfLoader = new GLTFLoader();
+    const loadedModels = [];
+    
+    // Material presets
+    const materialPresets = {
+      steel: { friction: 0.1, restitution: 0.3, color: 0x8a9a9a, roughness: 0.2, metalness: 0.9 },
+      rubber: { friction: 0.8, restitution: 0.8, color: 0x2e294e, roughness: 0.7, metalness: 0.1 },
+      granite: { friction: 0.6, restitution: 0.2, color: 0x808080, roughness: 0.8, metalness: 0.2 },
+      wood: { friction: 0.5, restitution: 0.3, color: 0x8b4513, roughness: 0.9, metalness: 0.1 },
+      ice: { friction: 0.05, restitution: 0.5, color: 0x87ceeb, roughness: 0.1, metalness: 0.3 },
+      foam: { friction: 0.7, restitution: 0.1, color: 0xffe4e1, roughness: 0.9, metalness: 0.0 }
+    };
+    
+    // Spawn body function
+    function spawnBody(shapeName, position = new Vec3(0, 10, 0)) {
+      let mesh, shape, mass;
+      const size = parseFloat(document.getElementById('size-slider').value);
+      mass = parseFloat(document.getElementById('mass-slider').value);
+      
+      // Get material properties
+      const preset = document.getElementById('material-preset').value;
+      let materialProps = { 
+        friction: parseFloat(document.getElementById('friction-slider').value),
+        restitution: parseFloat(document.getElementById('restitution-slider').value),
+        color: 0x00bfff,
+        roughness: 0.3,
+        metalness: 0.7
+      };
+      
+      if (preset !== 'custom') {
+        materialProps = { ...materialPresets[preset] };
+        document.getElementById('friction-slider').value = materialProps.friction;
+        document.getElementById('friction-value').textContent = materialProps.friction.toFixed(2);
+        document.getElementById('restitution-slider').value = materialProps.restitution;
+        document.getElementById('restitution-value').textContent = materialProps.restitution.toFixed(2);
+      }
+      
+      if(shapeName === 'Sphere') {
+        shape = new SphereShape(size);
+        mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(size, 48, 32),
+          new THREE.MeshStandardMaterial({
+            color: materialProps.color,
+            roughness: materialProps.roughness,
+            metalness: materialProps.metalness
+          })
+        );
+      } else if(shapeName === 'Box') {
+        shape = new BoxShape(size);
+        mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(size, size, size),
+          new THREE.MeshStandardMaterial({
+            color: materialProps.color,
+            roughness: materialProps.roughness,
+            metalness: materialProps.metalness
+          })
+        );
+      } else if(shapeName === 'Cylinder') {
+        const height = size * 1.5;
+        shape = new CylinderShape(size, height);
+        mesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(size, size, height, 48),
+          new THREE.MeshStandardMaterial({
+            color: materialProps.color,
+            roughness: materialProps.roughness,
+            metalness: materialProps.metalness
+          })
+        );
+      } else if(shapeName === 'Compound') {
+        const radius1 = size * 0.7;
+        const radius2 = size * 0.7;
+        const offset = size * 0.8;
+        shape = new CompoundShape([
+          { shape: new SphereShape(radius1), offset: new Vec3(-offset, 0, 0) },
+          { shape: new SphereShape(radius2), offset: new Vec3(offset, 0, 0) }
+        ]);
+        const group = new THREE.Group();
+        const sphere1 = new THREE.Mesh(
+          new THREE.SphereGeometry(radius1, 32, 32),
+          new THREE.MeshStandardMaterial({
+            color: materialProps.color,
+            roughness: materialProps.roughness,
+            metalness: materialProps.metalness
+          })
+        );
+        sphere1.position.x = -offset;
+        group.add(sphere1);
+        const sphere2 = new THREE.Mesh(
+          new THREE.SphereGeometry(radius2, 32, 32),
+          new THREE.MeshStandardMaterial({
+            color: materialProps.color,
+            roughness: materialProps.roughness,
+            metalness: materialProps.metalness
+          })
+        );
+        sphere2.position.x = offset;
+        group.add(sphere2);
+        mesh = group;
+      }
+      
+      mesh.position.set(position.x, position.y, position.z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+      
+      let rb = new RigidBody(position, shape, mass, mesh);
+      rb.angularVelocity = new Vec3(Math.random()*3-1.5, Math.random()*3-1.5, Math.random()*3-1.5);
+      rb.friction = materialProps.friction;
+      rb.restitution = materialProps.restitution;
+      rb.materialType = preset;
+      rb.fluidDensity = Number(document.getElementById('fluid-density-slider').value);
+      world.addBody(rb);
+      return rb;
+    }
+    
+    // --- Initialize UI after DOM is ready ---
+    document.addEventListener('DOMContentLoaded', () => {
+      // File loading
+      document.getElementById('model-input').addEventListener('change', e => {
+        for(const file of e.target.files) {
+          const url = URL.createObjectURL(file);
+          gltfLoader.load(url, gltf => {
+            loadedModels.push(gltf.scene);
+            const li = document.createElement('li');
+            li.innerHTML = `
+              <span>${file.name}</span>
+              <span>✅</span>
+            `;
+            document.getElementById('file-list').appendChild(li);
+          });
+        }
+      });
+      
+      // Slider value displays
+      document.getElementById('gravity-value').textContent = document.getElementById('gravity-slider').value;
+      document.getElementById('timescale-value').textContent = document.getElementById('timescale-slider').value;
+      document.getElementById('friction-value').textContent = document.getElementById('friction-slider').value;
+      document.getElementById('restitution-value').textContent = document.getElementById('restitution-slider').value;
+      document.getElementById('worldsize-value').textContent = document.getElementById('worldsize-slider').value;
+      document.getElementById('mass-value').textContent = document.getElementById('mass-slider').value;
+      document.getElementById('size-value').textContent = document.getElementById('size-slider').value;
+      document.getElementById('fluid-density-value').textContent = document.getElementById('fluid-density-slider').value;
+      document.getElementById('magnetic-strength-value').textContent = document.getElementById('magnetic-strength-slider').value;
+      
+      // UI Event Listeners
+      document.getElementById('gravity-slider').addEventListener('input', () => {
+        world.gravity.y = Number(document.getElementById('gravity-slider').value);
+        document.getElementById('gravity-value').textContent = world.gravity.y;
+      });
+      
+      let timeScale = 1;
+      document.getElementById('timescale-slider').addEventListener('input', () => {
+        timeScale = Number(document.getElementById('timescale-slider').value);
+        document.getElementById('timescale-value').textContent = timeScale.toFixed(2);
+      });
+      
+      document.getElementById('friction-slider').addEventListener('input', e => {
+        const value = Number(e.target.value);
+        document.getElementById('friction-value').textContent = value.toFixed(2);
+        if(selectedBody) selectedBody.friction = value;
+        updateObjectInfo();
+      });
+      
+      document.getElementById('restitution-slider').addEventListener('input', e => {
+        const value = Number(e.target.value);
+        document.getElementById('restitution-value').textContent = value.toFixed(2);
+        if(selectedBody) selectedBody.restitution = value;
+        updateObjectInfo();
+      });
+      
+      document.getElementById('mass-slider').addEventListener('input', e => {
+        const value = Number(e.target.value);
+        document.getElementById('mass-value').textContent = value.toFixed(2);
+      });
+      
+      document.getElementById('size-slider').addEventListener('input', e => {
+        const value = Number(e.target.value);
+        document.getElementById('size-value').textContent = value.toFixed(2);
+      });
+      
+      document.getElementById('worldsize-slider').addEventListener('input', () => {
+        let size = Number(document.getElementById('worldsize-slider').value);
+        world.setWorldSize(size);
+        document.getElementById('worldsize-value').textContent = size;
+      });
+      
+      // Material preset selector
+      document.getElementById('material-preset').addEventListener('change', e => {
+        const preset = e.target.value;
+        if (preset !== 'custom') {
+          const props = materialPresets[preset];
+          document.getElementById('friction-slider').value = props.friction;
+          document.getElementById('friction-value').textContent = props.friction.toFixed(2);
+          document.getElementById('restitution-slider').value = props.restitution;
+          document.getElementById('restitution-value').textContent = props.restitution.toFixed(2);
+        }
+      });
+      
+      // Simulation modes
+      document.getElementById('orbit-mode-btn').addEventListener('click', () => {
+        world.orbitMode = !world.orbitMode;
+        document.getElementById('orbit-mode-btn').classList.toggle('active', world.orbitMode);
+        updateModeIndicator();
+      });
+      
+      document.getElementById('fluid-mode-btn').addEventListener('click', () => {
+        world.fluidMode = !world.fluidMode;
+        document.getElementById('fluid-mode-btn').classList.toggle('active', world.fluidMode);
+        updateModeIndicator();
+      });
+      
+      document.getElementById('magnetic-mode-btn').addEventListener('click', () => {
+        world.magneticMode = !world.magneticMode;
+        document.getElementById('magnetic-mode-btn').classList.toggle('active', world.magneticMode);
+        updateModeIndicator();
+      });
+      
+      document.getElementById('fluid-density-slider').addEventListener('input', e => {
+        world.fluidDensity = Number(e.target.value);
+        document.getElementById('fluid-density-value').textContent = world.fluidDensity.toFixed(2);
+      });
+      
+      document.getElementById('magnetic-strength-slider').addEventListener('input', e => {
+        world.magneticStrength = Number(e.target.value);
+        document.getElementById('magnetic-strength-value').textContent = world.magneticStrength.toFixed(2);
+      });
+      
+      // Add sun button
+      document.getElementById('add-sun-btn').addEventListener('click', () => {
+        let existingSun = world.bodies.find(b => b.isSun);
+        if (existingSun) {
+          scene.remove(existingSun.mesh);
+          world.removeBody(existingSun);
+        }
+        
+        const sunRadius = 3;
+        const sunMesh = new THREE.Mesh(
+          new THREE.SphereGeometry(sunRadius, 64, 64),
+          new THREE.MeshBasicMaterial({
+            color: 0xffaa00,
+            emissive: 0xff7700,
+            emissiveIntensity: 2
+          })
+        );
+        sunMesh.position.set(0, 0, 0);
+        scene.add(sunMesh);
+        
+        const sunBody = new RigidBody(new Vec3(0,0,0), new SphereShape(sunRadius), 1000000, sunMesh);
+        sunBody.isSun = true;
+        sunBody.invMass = 0;
+        world.addBody(sunBody);
+        
+        dirLight.position.set(0, 0, 0);
+        dirLight.intensity = 2.0;
+      });
+      
+      // Paint mode button
+      document.getElementById('paint-btn').addEventListener('click', () => {
+        paintMode = !paintMode;
+        document.getElementById('paint-btn').classList.toggle('active', paintMode);
+        controls.enabled = !paintMode;
+        if(paintMode) {
+          document.getElementById('paint-btn').textContent = '🎨 Painting';
+        } else {
+          document.getElementById('paint-btn').textContent = '🎨 Paint Mode';
+        }
+      });
+      
+      document.getElementById('shoot-btn').addEventListener('click', () => {
+        let newBody = spawnBody(document.getElementById('spawn-shape').value, new Vec3(0, 10, 0));
+        if(newBody) newBody.velocity = new Vec3(0, 0, -20);
+      });
+      
+      document.getElementById('spawn-random-btn').addEventListener('click', () => {
+        const shapes = ['Sphere', 'Box', 'Cylinder', 'Compound'];
+        const randomShape = shapes[Math.floor(Math.random() * shapes.length)];
+        const halfSize = world.bounds.x / 2;
+        const x = (Math.random() - 0.5) * (halfSize * 1.6);
+        const z = (Math.random() - 0.5) * (halfSize * 1.6);
+        const y = world.orbitMode ? (Math.random() - 0.5) * (halfSize * 1.6) : (15 + Math.random() * 20);
+        spawnBody(randomShape, new Vec3(x, y, z));
+      });
+      
+      document.getElementById('reset-btn').addEventListener('click', () => {
+        world.bodies.forEach(b => scene.remove(b.mesh));
+        world.bodies = [];
+        selectedBody = null;
+        updateObjectInfo();
+        dirLight.position.set(30, 50, 30);
+        dirLight.intensity = 1.0;
+      });
+      
+      let paused = false;
+      document.getElementById('pause-btn').onclick = () => {
+        paused = true;
+        document.getElementById('pause-btn').style.display='none';
+        document.getElementById('resume-btn').style.display='inline-block';
+      };
+      
+      document.getElementById('resume-btn').onclick = () => {
+        paused = false;
+        document.getElementById('pause-btn').style.display='inline-block';
+        document.getElementById('resume-btn').style.display='none';
+      };
+      
+      // Camera controls
+      document.getElementById('cam-front-btn').onclick = () => { 
+        camera.position.set(0, 25, 50); 
+        controls.target.set(0, 0, 0); 
+        controls.update();
+      };
+      
+      document.getElementById('cam-top-btn').onclick = () => { 
+        camera.position.set(0, 80, 0.1); 
+        controls.target.set(0, 0, 0); 
+        controls.update();
+      };
+      
+      document.getElementById('cam-side-btn').onclick = () => { 
+        camera.position.set(50, 25, 0); 
+        controls.target.set(0, 0, 0); 
+        controls.update();
+      };
+      
+      document.getElementById('cam-orbit-btn').onclick = () => { 
+        camera.position.set(0, 25, 50); 
+        controls.target.set(0, 0, 0); 
+        controls.enable = true;
+        controls.update();
+      };
+      
+      document.getElementById('reset-object-btn').onclick = () => {
+        if(selectedBody) {
+          selectedBody.position = new Vec3(0, 10, 0);
+          selectedBody.velocity = Vec3.zero();
+          selectedBody.angularVelocity = Vec3.zero();
+          selectedBody.mesh.position.set(0, 10, 0);
+          selectedBody.mesh.rotation.set(0, 0, 0);
+          updateObjectInfo();
+        }
+      };
+      
+      // Save/Load Scene
+      document.getElementById('save-btn').addEventListener('click', () => {
+        let data = world.bodies.map(b => ({
+          type: b.shape.type, 
+          position: [b.position.x, b.position.y, b.position.z], 
+          velocity: [b.velocity.x, b.velocity.y, b.velocity.z],
+          angularVelocity: [b.angularVelocity.x, b.angularVelocity.y, b.angularVelocity.z], 
+          mass: b.mass, 
+          friction: b.friction, 
+          restitution: b.restitution,
+          size: b.shape.size || b.shape.radius, 
+          height: b.shape.height, 
+          color: b.mesh.material.color.getHex(),
+          isSun: b.isSun,
+          orientation: [b.orientation.x, b.orientation.y, b.orientation.z, b.orientation.w],
+          magneticCharge: b.magneticCharge,
+          fluidDensity: b.fluidDensity,
+          materialType: b.materialType
+        }));
+        let blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+        let a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); 
+        a.download = 'approx-sandbox-scene.json'; 
+        a.click();
+      });
+      
+      document.getElementById('import-btn').onclick = () => document.getElementById('import-scene-input').click();
+      document.getElementById('import-scene-input').addEventListener('change', e => {
+        if(e.target.files.length === 0) return;
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const data = JSON.parse(reader.result);
+            world.bodies.forEach(b => scene.remove(b.mesh));
+            world.bodies = [];
+            selectedBody = null;
+            data.forEach(item => {
+              let mesh, shape;
+              if(item.type === SHAPE_TYPE.SPHERE) {
+                shape = new SphereShape(item.size);
+                if (item.isSun) {
+                  mesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(item.size, 64, 64),
+                    new THREE.MeshBasicMaterial({
+                      color: 0xffaa00,
+                      emissive: 0xff7700,
+                      emissiveIntensity: 2
+                    })
+                  );
+                } else {
+                  mesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(item.size, 48, 32),
+                    new THREE.MeshStandardMaterial({
+                      color: item.color,
+                      roughness: 0.2,
+                      metalness: 0.8
+                    })
+                  );
+                }
+              } else if(item.type === SHAPE_TYPE.BOX) {
+                shape = new BoxShape(item.size);
+                mesh = new THREE.Mesh(
+                  new THREE.BoxGeometry(item.size, item.size, item.size),
+                  new THREE.MeshStandardMaterial({
+                    color: item.color,
+                    roughness: 0.3,
+                    metalness: 0.7
+                  })
+                );
+              } else if(item.type === SHAPE_TYPE.CYLINDER) {
+                shape = new CylinderShape(item.size, item.height);
+                mesh = new THREE.Mesh(
+                  new THREE.CylinderGeometry(item.size, item.size, item.height, 48),
+                  new THREE.MeshStandardMaterial({
+                    color: item.color,
+                    roughness: 0.4,
+                    metalness: 0.5
+                  })
+                );
+              } else if(item.type === SHAPE_TYPE.CUSTOM) {
+                shape = new CompoundShape([
+                  { shape: new SphereShape(item.size/2), offset: new Vec3(-item.size/2, 0, 0) },
+                  { shape: new SphereShape(item.size/2), offset: new Vec3(item.size/2, 0, 0) }
+                ]);
+                const group = new THREE.Group();
+                const sphere1 = new THREE.Mesh(
+                  new THREE.SphereGeometry(item.size/2, 32, 32),
+                  new THREE.MeshStandardMaterial({
+                    color: item.color,
+                    roughness: 0.3,
+                    metalness: 0.6
+                  })
+                );
+                sphere1.position.x = -item.size/2;
+                group.add(sphere1);
+                const sphere2 = new THREE.Mesh(
+                  new THREE.SphereGeometry(item.size/2, 32, 32),
+                  new THREE.MeshStandardMaterial({
+                    color: item.color,
+                    roughness: 0.3,
+                    metalness: 0.6
+                  })
+                );
+                sphere2.position.x = item.size/2;
+                group.add(sphere2);
+                mesh = group;
+              }
+              if(mesh) {
+                mesh.position.set(item.position[0], item.position[1], item.position[2]);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+                let rb = new RigidBody(
+                  new Vec3(item.position[0], item.position[1], item.position[2]), 
+                  shape, 
+                  item.mass, 
+                  mesh
+                );
+                rb.velocity = new Vec3(item.velocity[0], item.velocity[1], item.velocity[2]);
+                rb.angularVelocity = new Vec3(item.angularVelocity[0], item.angularVelocity[1], item.angularVelocity[2]);
+                rb.friction = item.friction;
+                rb.restitution = item.restitution;
+                rb.isSun = item.isSun || false;
+                rb.magneticCharge = item.magneticCharge || (Math.random() > 0.5 ? 1 : -1);
+                rb.fluidDensity = item.fluidDensity || 0.5;
+                rb.materialType = item.materialType || 'custom';
+                if (item.orientation) {
+                  rb.orientation = new Quaternion(
+                    item.orientation[0],
+                    item.orientation[1],
+                    item.orientation[2],
+                    item.orientation[3]
+                  );
+                }
+                if (rb.isSun) {
+                  rb.invMass = 0;
+                  dirLight.position.set(item.position[0], item.position[1], item.position[2]);
+                  dirLight.intensity = 2.0;
+                }
+                world.addBody(rb);
+              }
+            });
+            updateObjectInfo();
+          } catch (error) {
+            console.error('Error loading scene:', error);
+            alert('Error loading scene file');
+          }
+        };
+        reader.readAsText(file);
+      });
+      
+      // --- User Interaction Logic ---
+      let selectedBody = null;
+      let draggingBody = null;
+      let paintMode = false;
+      let isPainting = false;
+      let lastPaintPoint = new THREE.Vector3();
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+      
+      // Invisible plane for painting
+      const paintPlane = new THREE.Mesh(
+        new THREE.PlaneGeometry(200, 200),
+        new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide })
+      );
+      paintPlane.rotation.x = -Math.PI / 2;
+      scene.add(paintPlane);
+      
+      function getMouseIntersection() {
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObject(paintPlane);
+        return intersects.length > 0 ? intersects[0].point : null;
+      }
+      
+      renderer.domElement.addEventListener('pointerdown', e => {
+        mouse.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+        if (paintMode) {
+          isPainting = true;
+          controls.enabled = false;
+          const point = getMouseIntersection();
+          if (point) {
+            spawnBody(document.getElementById('spawn-shape').value, new Vec3(point.x, point.y + 2, point.z));
+            lastPaintPoint.copy(point);
+          }
+        } else {
+          raycaster.setFromCamera(mouse, camera);
+          const intersects = raycaster.intersectObjects(scene.children, true);
+          if(selectedBody?.mesh) {
+            selectedBody.mesh.material.emissive?.setHex(0x000000);
+            selectedBody.mesh.material.color.setHex(selectedBody.originalColor);
+          }
+          selectedBody = null;
+          if(intersects.length) {
+            const mesh = intersects[0].object;
+            selectedBody = world.bodies.find(b => b.mesh === mesh || b.mesh.contains(mesh));
+            if(selectedBody) {
+              selectedBody.originalColor = selectedBody.mesh.material.color.getHex();
+              selectedBody.mesh.material.emissive?.setHex(0x00ff40);
+              draggingBody = selectedBody;
+              controls.enabled = false;
+            }
+          }
+          updateObjectInfo();
+        }
+      });
+      
+      renderer.domElement.addEventListener('pointermove', e => {
+        mouse.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+        if (paintMode && isPainting) {
+          const point = getMouseIntersection();
+          if (point && point.distanceTo(lastPaintPoint) > 1.2) {
+            spawnBody(document.getElementById('spawn-shape').value, new Vec3(point.x, point.y + 2, point.z));
+            lastPaintPoint.copy(point);
+          }
+        } else if (draggingBody) {
+          const point = getMouseIntersection();
+          if (point) {
+            draggingBody.position.x = point.x;
+            draggingBody.position.z = point.z;
+            draggingBody.velocity = Vec3.zero();
+            draggingBody.mesh.position.set(point.x, draggingBody.position.y, draggingBody.position.z);
+          }
+        }
+      });
+      
+      renderer.domElement.addEventListener('pointerup', e => {
+        isPainting = false;
+        draggingBody = null;
+        if (!paintMode) {
+          controls.enabled = true;
+        }
+      });
+      
+      function updateObjectInfo() {
+        const infoDiv = document.getElementById('object-info');
+        if(selectedBody) {
+          const shapeNames = {0: 'Sphere', 1: 'Box', 2: 'Cylinder', 3: 'Compound'};
+          infoDiv.innerHTML = `
+            <b>Selected Object</b>
+            <p>Type: ${shapeNames[selectedBody.shape.type] || 'Unknown'}</p>
+            <p>Material: ${selectedBody.materialType.charAt(0).toUpperCase() + selectedBody.materialType.slice(1)}</p>
+            <p>Mass: ${selectedBody.mass.toFixed(2)}</p>
+            <p>Position: (${selectedBody.position.x.toFixed(2)}, ${selectedBody.position.y.toFixed(2)}, ${selectedBody.position.z.toFixed(2)})</p>
+            <p>Velocity: ${selectedBody.velocity.length().toFixed(2)}</p>
+            <p>Angular Velocity: ${selectedBody.angularVelocity.length().toFixed(2)}</p>
+            <p>Restitution: ${selectedBody.restitution.toFixed(2)}</p>
+            <p>Friction: ${selectedBody.friction.toFixed(2)}</p>
+            ${selectedBody.isSun ? '<p>☀️ This is the Sun</p>' : ''}
+            ${world.magneticMode ? `<p>Magnetic Charge: ${selectedBody.magneticCharge > 0 ? '+' : '-'}</p>` : ''}
+            ${world.fluidMode ? `<p>Fluid Density: ${selectedBody.fluidDensity.toFixed(2)}</p>` : ''}
+          `;
+        } else {
+          infoDiv.innerHTML = '<b>Selected Object</b><p>No object selected</p>';
+        }
+      }
+      
+      function updateModeIndicator() {
+        const modeValue = document.getElementById('mode-value');
+        let modeText = 'Standard';
+        let modeClass = '';
+        
+        if (world.orbitMode) {
+          modeText = 'Orbit Mode';
+          modeClass = 'orbit-mode';
+        } else if (world.fluidMode) {
+          modeText = 'Fluid Dynamics';
+          modeClass = 'fluid-mode';
+        } else if (world.magneticMode) {
+          modeText = 'Magnetic Fields';
+          modeClass = 'magnetic-mode';
+        }
+        
+        modeValue.textContent = modeText;
+        modeValue.className = modeClass;
+      }
+      
+      // --- Simulation Loop & Stats ---
+      let lastTime = performance.now(), frameCount = 0, lastStatsTime = performance.now();
+      function animate() {
+        requestAnimationFrame(animate);
+        if(paused) { 
+          renderer.render(scene, camera); 
+          return; 
+        }
+        let now = performance.now();
+        let dt = Math.min(0.033, (now-lastTime)/1000) * timeScale;
+        lastTime = now;
+        world.update(dt);
+        controls.update();
+        renderer.render(scene, camera);
+        frameCount++;
+        if(now-lastStatsTime > 1000) {
+          document.getElementById('fps-value').textContent = frameCount;
+          document.getElementById('bodies-value').textContent = world.bodies.length;
+          document.getElementById('collisions-value').textContent = world.collisionCount;
+          frameCount = 0;
+          lastStatsTime = now;
+        }
+        if(selectedBody) updateObjectInfo();
+      }
+      
+      // --- UI Sidebar/Overlay ---
+      document.getElementById('start-button').onclick = () => {
+        document.getElementById('loading-overlay').style.display='none';
+        document.getElementById('sidebar').style.display='block';
+        document.getElementById('toggle-sidebar').style.display='block';
+        if (window.innerWidth > 768) document.body.classList.add('sidebar-visible');
+        animate();
+      };
+      
+      document.getElementById('toggle-sidebar').onclick = () => document.body.classList.toggle('sidebar-visible');
+      
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    });
+  </script>
+</body>
+</html>
